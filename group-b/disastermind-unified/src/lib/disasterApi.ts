@@ -1,5 +1,7 @@
-const API_BASE_URL = 'http://localhost:8000'
-const WS_URL = 'ws://localhost:8000/ws'
+import { config } from './config'
+
+const API_BASE_URL = config.api.baseUrl
+const WS_URL = config.api.wsUrl
 
 export interface Message {
   id: string

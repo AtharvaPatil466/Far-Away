@@ -1,5 +1,7 @@
-export const OLLAMA_BASE = 'http://localhost:11434'
-export const OLLAMA_MODEL = 'llama3.2'
+import { config } from './config'
+
+export const OLLAMA_BASE = config.ollama.url
+export const OLLAMA_MODEL = config.ollama.model
 
 type OllamaChatResponse = {
   message?: {
