@@ -29,7 +29,7 @@ export function wsUrl(path = "/ws"): string {
   if (WS_BASE) return `${WS_BASE}${path}`;
   if (API_BASE) {
     // Derive ws scheme from the HTTP base.
-    return API_BASE.replace(/^http(s?):/, (_m, s) => `ws${s}:`) + path;
+    return API_BASE.replace(/^http(s?):/, (_m: string, s: string) => `ws${s}:`) + path;
   }
   // Relative: mirror the reference UI (wss when the page is https).
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
