@@ -5,9 +5,12 @@ import type { AgentMessage, WSConnectionState } from '../../lib/disasterApi'
 import { AgentFeed } from './components/AgentFeed'
 import { BriefingPanel } from './components/BriefingPanel'
 import { EscalationQueue } from './components/EscalationQueue'
-import { MockMap } from './components/MockMap'
+import { LiveMap } from './components/LiveMap'
+import { MapLegend } from './components/MapLegend'
 import { ResourcePanel } from './components/ResourcePanel'
 import { useDemoTimeline } from '../../lib/demoTimeline'
+import { SYNTHETIC_MAP_STATE } from '../../lib/mapTypes'
+import type { MapState } from '../../lib/mapTypes'
 
 function formatStatusTime(timestamp: string) {
   const parsed = new Date(timestamp)
@@ -41,6 +44,7 @@ export function Dashboard() {
   const [zone7OverrideState, setZone7OverrideState] = useState<'pending' | 'auto-executing' | 'approved' | 'overridden' | 'removed'>('pending')
   const [showAutoExecBanner, setShowAutoExecBanner] = useState(false)
   const [boatsAdjustment, setBoatsAdjustment] = useState(0)
+  const [mapState, setMapState] = useState<MapState>(SYNTHETIC_MAP_STATE)
 
   // Demo Timeline callbacks
   const {
@@ -139,12 +143,73 @@ export function Dashboard() {
     setEscalationApproved(true)
   }
 
+  // GPS drift simulation — every 8 seconds, jiggle team positions slightly
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMapState(prev => {
+        const teams = { ...prev.teams }
+        Object.keys(teams).forEach(id => {
+          // Small lat/lon deltas comparable to the pixel drift in MockMap
+          const maxDelta = id === 'UNIT-C1' ? 0.006 : 0.003
+          const dLat = (Math.random() * 2 - 1) * maxDelta
+          const dLon = (Math.random() * 2 - 1) * maxDelta
+          teams[id] = {
+            ...teams[id],
+            location: {
+              lat: teams[id].location.lat + dLat,
+              lon: teams[id].location.lon + dLon,
+            },
+          }
+        })
+        return { ...prev, teams }
+      })
+    }, 8000)
+    return () => clearInterval(interval)
+  }, [])
+
   useEffect(() => {
     const disconnect = connectWebSocket(
       (message) => {
         setLatestMessage(message)
         setLastMessageTime(formatStatusTime(message.timestamp))
         recordMessage()
+
+        // Group A WebSocket integration — update map state from live telemetry
+        if (message.topic === 'tier3.iot_telemetry') {
+          const p = message.payload as Record<string, unknown> | undefined
+          if (p?.kind === 'gps_beacon') {
+            const readings = (p.readings ?? []) as Array<{
+              team_id: string
+              location: { lat: number; lon: number }
+              status?: 'active' | 'staged' | 'distress' | 'offline'
+              timestamp: string
+            }>
+            readings.forEach(r => {
+              setMapState(prev => ({
+                ...prev,
+                teams: {
+                  ...prev.teams,
+                  [r.team_id]: {
+                    team_id: r.team_id,
+                    location: r.location,
+                    status: r.status ?? 'active',
+                    timestamp: r.timestamp,
+                  },
+                },
+              }))
+            })
+          }
+        }
+
+        if (message.topic === 'tier2.prediction') {
+          const p = message.payload as Record<string, unknown> | undefined
+          if (p?.risk_cells) {
+            setMapState(prev => ({
+              ...prev,
+              riskCells: p.risk_cells as typeof prev.riskCells,
+            }))
+          }
+        }
       },
       (state) => {
         setWsState(state)
@@ -275,7 +340,10 @@ export function Dashboard() {
           />
         </aside>
         <section className="center-column" aria-label="Operational map">
-          <MockMap isRiverWarning={isRiverWarningActive} />
+          <div style={{ position: 'relative', height: '100%' }}>
+            <LiveMap mapState={mapState} />
+            <MapLegend />
+          </div>
         </section>
         <aside className="side-column right-column">
           <EscalationQueue
