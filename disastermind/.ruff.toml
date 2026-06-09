@@ -1,0 +1,52 @@
+# Ruff configuration for DisasterMind (PRD Step 10 — CI lint gate).
+#
+# Single source of truth for Ruff (Ruff prefers ``.ruff.toml`` over a
+# ``[tool.ruff]`` table in pyproject, so all config lives here). The selection is
+# deliberately PRAGMATIC, not maximal: catch real bugs and obvious style drift
+# without drowning a large, gradually-typed, stdlib-first codebase in noise.
+#
+# Run locally with:  ruff check .   (from the disastermind/ project dir)
+
+target-version = "py311"
+line-length = 100
+
+# Owned by other workstreams or generated — never lint these.
+extend-exclude = [
+    "clients",
+    "tests/integration",
+    "monitoring",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "*.egg-info",
+]
+
+[lint]
+# A focused, high-signal rule set:
+#   E/W  pycodestyle errors/warnings        F   pyflakes (undefined names, unused)
+#   I    import sorting                      UP  pyupgrade (modern syntax)
+#   B    flake8-bugbear (likely bugs)        C4  flake8-comprehensions
+#   SIM  flake8-simplify                     PIE misc lints
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "PIE"]
+
+# Sensible relaxations so the gate is useful rather than pedantic.
+ignore = [
+    "E501",    # line length is handled by the formatter, not a hard error
+    "B008",    # function calls in argument defaults (common, intentional here)
+    "SIM105",  # contextlib.suppress over try/except/pass — not always clearer
+]
+
+[lint.per-file-ignores]
+# Tests favour readability over lint purity: allow unused imports/fixtures,
+# star-context patterns, and assert-heavy bodies.
+"tests/**" = ["B", "SIM", "F811", "E402"]
+# Package __init__ files commonly re-export names (F401) deliberately.
+"**/__init__.py" = ["F401"]
+
+[lint.isort]
+known-first-party = ["disastermind"]
+
+[lint.mccabe]
+max-complexity = 15

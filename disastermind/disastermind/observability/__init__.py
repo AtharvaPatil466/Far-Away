@@ -11,7 +11,7 @@ Wire it into the DAG via :func:`build_agents`.
 from __future__ import annotations
 
 from .build import build_agents
-from .collector import MetricsCollector, all_topics
+from .collector import DEFAULT_LATENCY_BUCKETS, MetricsCollector, all_topics
 from .exposition import render
 from .health import health
 
@@ -21,4 +21,5 @@ __all__ = [
     "all_topics",
     "render",
     "health",
+    "DEFAULT_LATENCY_BUCKETS",
 ]

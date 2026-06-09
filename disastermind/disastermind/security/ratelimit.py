@@ -37,6 +37,18 @@ ENV_RATE_REFILL = "DM_RATE_REFILL_PER_SEC"
 DEFAULT_CAPACITY = 60
 DEFAULT_REFILL_PER_SECOND = 60.0
 
+# Per-CLIENT-IP knobs (PRD Step 7 hardening). The IP limiter is the OUTER bound:
+# it caps an *unauthenticated* burst from a single source address before token
+# auth even runs, so an anonymous flood is bounded independently of any principal
+# bucket. Defaults are deliberately generous (a real operator/proxy never trips
+# them) yet finite, so a hostile burst cannot be unbounded.
+ENV_RATE_IP_CAPACITY = "DM_RATE_IP_CAPACITY"
+ENV_RATE_IP_REFILL = "DM_RATE_IP_REFILL_PER_SEC"
+
+#: Default per-IP burst capacity and sustained refill (tokens/second).
+DEFAULT_IP_CAPACITY = 120
+DEFAULT_IP_REFILL_PER_SECOND = 120.0
+
 
 def _env_float(key: str, default: float) -> float:
     try:
@@ -173,3 +185,53 @@ class RateLimiter:
                 self._buckets.clear()
             else:
                 self._buckets.pop(principal, None)
+
+
+# ----------------------------------------------------------------- per-IP limiting
+def ip_rate_limiter(clock: Callable[[], float] = time.monotonic) -> "RateLimiter":
+    """Build a :class:`RateLimiter` tuned for per-CLIENT-IP buckets (PRD Step 7).
+
+    Reads the dedicated ``DM_RATE_IP_*`` knobs (separate from the per-principal
+    ``DM_RATE_*`` ones) so an operator can bound an unauthenticated burst without
+    affecting the per-principal limits. Stdlib-only, clock injectable for tests.
+    """
+    return RateLimiter(
+        capacity=_env_int(ENV_RATE_IP_CAPACITY, DEFAULT_IP_CAPACITY),
+        refill_per_second=_env_float(ENV_RATE_IP_REFILL, DEFAULT_IP_REFILL_PER_SECOND),
+        clock=clock,
+    )
+
+
+def client_ip(scope: dict | None, *, trust_forwarded: bool = True) -> str:
+    """Extract a best-effort client IP key from an ASGI ``scope`` (never raises).
+
+    Resolution order (PRD Step 7):
+
+    * the left-most address in ``X-Forwarded-For`` (the original client behind a
+      trusted reverse proxy / load balancer), when ``trust_forwarded`` — Railway,
+      Heroku and most ingress controllers set this;
+    * else the ASGI ``client`` tuple's host;
+    * else the literal ``"unknown"`` so a missing address still shares one bucket
+      (bounded) rather than being unlimited.
+
+    The returned string is only ever used as an in-memory bucket key, so a spoofed
+    ``X-Forwarded-For`` can at worst evade *its own* bucket — it can never amplify
+    against another client, and the per-principal limiter still applies.
+    """
+    if not scope:
+        return "unknown"
+    try:
+        headers = scope.get("headers") or []
+        if trust_forwarded:
+            for k, v in headers:
+                if k == b"x-forwarded-for" or k == "x-forwarded-for":
+                    raw = v.decode("latin-1") if isinstance(v, (bytes, bytearray)) else str(v)
+                    first = raw.split(",")[0].strip()
+                    if first:
+                        return first
+        client = scope.get("client")
+        if client and isinstance(client, (tuple, list)) and client[0]:
+            return str(client[0])
+    except Exception:  # pragma: no cover - extraction must never raise
+        return "unknown"
+    return "unknown"

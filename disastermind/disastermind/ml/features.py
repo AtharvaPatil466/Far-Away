@@ -23,14 +23,13 @@ can build name->value dicts (the shape SHAP wants) without re-deriving order.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Iterable
+from collections.abc import Iterable
+from dataclasses import dataclass
+from typing import Any
 
 from ..core.contracts import Module
 from ..models.domain import EventKind
 from ..models.geo import LatLon
-
 
 # --------------------------------------------------------------------------- schema
 #: Ordered feature names per module. These are FROZEN: models persist artefacts

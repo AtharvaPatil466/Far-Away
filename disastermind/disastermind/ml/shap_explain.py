@@ -24,13 +24,13 @@ itself is installed but the model is the stdlib heuristic.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from ..core.contracts import Module
 from .features import FEATURE_NAMES, FeatureVector
 from .models import RiskModel
-
 
 # Per-module baseline feature row (a "reference" sample). Attribution measures
 # how moving each feature from this baseline to its observed value shifts the

@@ -19,11 +19,17 @@ AUDIT       ?= audit.jsonl
 # Container / compose settings.
 IMAGE       ?= disastermind
 TAG         ?= latest
+# Host port to publish for `make docker-run` (maps to the container's $PORT).
+PORT        ?= 8000
+# Optional dependency extras baked into the image, e.g. EXTRAS="[all]".
+EXTRAS      ?=
+# SBOM output path (CycloneDX JSON).
+SBOM        ?= sbom.json
 
 .DEFAULT_GOAL := help
 
 .PHONY: help install dev test lint run simulate verify-audit \
-        compose-up compose-down docker-build clean
+        compose-up compose-down docker-build docker-run deploy-check sbom clean
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -57,8 +63,29 @@ compose-up: ## Bring up the backing stores (kafka, postgis, timescale, es, minio
 compose-down: ## Tear down the backing stores (keeps named volumes).
 	docker compose down
 
-docker-build: ## Build the application container image.
-	docker build -t $(IMAGE):$(TAG) .
+docker-build: ## Build the production container image (multi-stage, EXTRAS="[all]").
+	docker build --build-arg EXTRAS="$(EXTRAS)" -t $(IMAGE):$(TAG) .
+
+docker-run: ## Run the built image, serving the dashboard API on $$PORT (default 8000).
+	docker run --rm -e PORT=$(PORT) -p $(PORT):$(PORT) $(IMAGE):$(TAG)
+
+deploy-check: ## Pre-deploy gate: validate settings, build image, smoke-test offline.
+	$(PYTHON) -c "import sys; from disastermind.ops import validate_settings; from disastermind.core.config import Settings; p=list(validate_settings(Settings())); print('settings OK' if not p else 'settings problems: %r' % (p,)); sys.exit(1 if p else 0)"
+	$(MAKE) docker-build
+	docker run --rm $(IMAGE):$(TAG) python -m disastermind simulate $(MODULE)
+
+sbom: ## Generate a CycloneDX SBOM ($(SBOM)); prefers syft, else `pip` freeze fallback.
+	@if command -v syft >/dev/null 2>&1; then \
+	  syft "$(IMAGE):$(TAG)" -o cyclonedx-json > "$(SBOM)"; \
+	elif $(PYTHON) -c "import cyclonedx_py" >/dev/null 2>&1; then \
+	  $(PYTHON) -m cyclonedx_py environment -o "$(SBOM)"; \
+	else \
+	  echo "syft/cyclonedx-py not found — writing a pip-freeze fallback manifest to $(SBOM)"; \
+	  printf '{"bomFormat":"CycloneDX","specVersion":"1.5","components":[\n' > "$(SBOM)"; \
+	  $(PIP) freeze | awk -F'==' 'NF==2{printf "%s{\"type\":\"library\",\"name\":\"%s\",\"version\":\"%s\"}", (NR>1?",\n":""), $$1, $$2}' >> "$(SBOM)"; \
+	  printf '\n]}\n' >> "$(SBOM)"; \
+	fi
+	@echo "SBOM written to $(SBOM)"
 
 clean: ## Remove caches and local runtime artefacts.
 	rm -rf .pytest_cache .mypy_cache .ruff_cache *.egg-info build dist

@@ -1,0 +1,229 @@
+# DisasterMind continuous integration (PRD Group A, Step 10 — productionisation).
+#
+# GitHub Actions only runs workflows from the REPOSITORY ROOT (.github/workflows),
+# not from the nested project directory. The DisasterMind project lives under
+# ``disastermind/``, so every job ``cd``s into it (or sets a working-directory)
+# before installing and testing.
+#
+# The runtime + test-suite are standard-library only (offline, no network, no
+# heavy optional deps), so CI installs the package with the dev extras and runs
+# pytest across the supported interpreter matrix (pyproject requires-python >=3.11).
+# The clients/ and tests/integration/ trees are owned by other workstreams and are
+# explicitly ignored here.
+#
+# Quality gates layered on top of the test matrix + docker build:
+#   * lint       — ruff check (fast, deterministic style/correctness lint).
+#   * typecheck  — mypy on disastermind/ (advisory: continue-on-error so a noisy
+#                  type surface never blocks the pipeline; tighten over time).
+#   * security   — Trivy filesystem + image scan and a pip-audit of the dep tree.
+#   * sbom       — CycloneDX software bill-of-materials, uploaded as an artefact.
+# All extra jobs ``cd`` into disastermind/ (via the workflow-level working-directory
+# default, or an explicit ``cd`` for the container-scanning steps).
+name: ci
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Every step runs from the nested project directory by default.
+    working-directory: disastermind
+
+jobs:
+  test:
+    name: test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: disastermind/pyproject.toml
+
+      - name: Install (dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run tests
+        # The clients/ and tests/integration/ trees belong to other workstreams.
+        run: pytest -q --ignore=tests/integration --ignore=clients
+
+  lint:
+    name: lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: disastermind/pyproject.toml
+
+      - name: Install lint extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[lint]
+
+      - name: ruff check
+        # Lint the package and tests; config lives in pyproject.toml / .ruff.toml.
+        run: ruff check .
+
+  typecheck:
+    name: typecheck (mypy)
+    runs-on: ubuntu-latest
+    # Advisory gate: a static-typing surface this large is noisy, so a failure
+    # must NOT block merges. We still surface the report in the job log.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: disastermind/pyproject.toml
+
+      - name: Install lint extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[lint]
+
+      - name: mypy
+        # Non-blocking even if the step itself errors (belt-and-braces alongside
+        # the job-level continue-on-error above).
+        continue-on-error: true
+        run: mypy disastermind/
+
+  security:
+    name: security (trivy + pip-audit)
+    runs-on: ubuntu-latest
+    needs: test
+    # Scanners can be noisy on transitive advisories; never block the pipeline on
+    # a finding here — the report is the deliverable, triage happens out of band.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: disastermind/pyproject.toml
+
+      - name: Install package + audit tool
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pip-audit
+
+      - name: pip-audit (dependency vulnerabilities)
+        continue-on-error: true
+        run: pip-audit --progress-spinner off || true
+
+      - name: Build image for scanning
+        # Container scan needs an image; build the same one the docker job builds.
+        run: docker build -t disastermind:scan .
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.24.0
+        continue-on-error: true
+        with:
+          image-ref: disastermind:scan
+          format: table
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.24.0
+        continue-on-error: true
+        with:
+          scan-type: fs
+          scan-ref: disastermind
+          format: table
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+
+  sbom:
+    name: sbom (cyclonedx)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: disastermind/pyproject.toml
+
+      - name: Install package + CycloneDX
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install cyclonedx-bom
+
+      - name: Generate CycloneDX SBOM
+        # Produce a machine-readable bill of materials of the installed env.
+        run: cyclonedx-py environment --output-format JSON --outfile sbom.cdx.json
+
+      - name: Upload SBOM artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: disastermind/sbom.cdx.json
+          if-no-files-found: warn
+
+  docker:
+    name: docker build
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: disastermind
+          file: disastermind/Dockerfile
+          push: false
+          load: true
+          tags: disastermind:ci
+
+      - name: Smoke-test the image (offline scenario, stdlib-only)
+        run: docker run --rm disastermind:ci python -m disastermind simulate B

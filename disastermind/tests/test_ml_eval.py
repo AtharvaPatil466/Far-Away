@@ -255,8 +255,10 @@ def test_model_card_renders_non_empty(module: Module) -> None:
     assert f"Module {module.value}" in md
     assert "## Limitations" in md
     assert "## Held-out metrics" in md
-    # The headline honesty: synthetic, not validated on real events.
+    # The headline honesty: the backtest harness is synthetic and says so;
+    # real-data evidence lives in disastermind.ml.validation.
     assert any("synthetic" in lim.lower() for lim in card["limitations"])
+    assert any("validation" in lim.lower() for lim in card["limitations"])
 
 
 def test_model_card_heuristic_fallback_limitation() -> None:

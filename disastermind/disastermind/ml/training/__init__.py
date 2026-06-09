@@ -2,11 +2,15 @@
 
 PRD Step 10. The tier-2 prediction agents consume per-module risk models via
 :func:`disastermind.ml.get_model`; this package is the *producer* that fits those
-models on deterministic synthetic data and persists them:
+models on REAL historical data and persists them:
 
-  * :mod:`~disastermind.ml.training.synthetic` — reproducible labelled ``(X, y)``
-    per module A/B/C, columns matching :data:`disastermind.ml.FEATURE_NAMES`.
-  * :mod:`~disastermind.ml.training.train`     — ``train_all(out_dir, seed=0)``
+  * :mod:`~disastermind.ml.training.real` — training tables derived from the
+    committed real fixtures (USGS quakes, GloFAS/ERA5 floods, FPA-FOD/ERA5
+    wildfires), columns matching :data:`disastermind.ml.FEATURE_NAMES`. This is
+    the production path: NO shipped artefact is fitted on synthetic data.
+  * :mod:`~disastermind.ml.training.synthetic` — the legacy controllable-signal
+    generator, retained for unit tests only (``source="synthetic"``).
+  * :mod:`~disastermind.ml.training.train`     — ``train_all(out_dir)``
     fits+saves all three; ``load_trained(out_dir, module)`` restores one.
 
 Run as a module to train+save all three and print the manifest::
@@ -19,6 +23,7 @@ network, no wall-clock — a given ``seed`` reproduces the same artefacts exactl
 """
 from __future__ import annotations
 
+from .real import make_real_dataset
 from .synthetic import (
     extreme_rows,
     label_for,
@@ -35,7 +40,9 @@ from .train import (
 )
 
 __all__ = [
-    # synthetic data
+    # real training data (production path)
+    "make_real_dataset",
+    # synthetic data (test-only)
     "make_dataset",
     "label_for",
     "extreme_rows",

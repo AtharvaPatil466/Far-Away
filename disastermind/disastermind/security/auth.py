@@ -24,11 +24,26 @@ live in code:
 
 * ``DM_API_KEYS`` — comma/whitespace-separated bearer tokens (the simple form).
 * ``DM_API_KEYS_MAP`` — ``principal:token`` pairs (comma-separated) when you want
-  named principals (e.g. ``commander:abc123,observer:def456``).
+  named principals (e.g. ``commander:abc123,observer:def456``). An OPTIONAL third
+  field assigns an RBAC role: ``alice:tok1:admin,bob:tok2:operator`` (see below).
+* ``DM_API_SCOPES`` — an *additional* ``principal:role`` (or ``principal:scope``)
+  map layered onto already-registered principals, e.g. ``alice:admin,bob:viewer``.
 
 A bare token from ``DM_API_KEYS`` is given the principal name equal to a short,
 non-reversible fingerprint so audit logs can attribute actions without leaking
-the secret.
+the secret. Its role defaults to ``operator`` so existing single-key deployments
+keep their read+act access unchanged (back-compat).
+
+RBAC roles (PRD Step 7 access control) are hierarchical and expand to scopes:
+
+* ``viewer``   → ``{viewer}``                     — read-only (GET routes)
+* ``operator`` → ``{viewer, operator}``           — read + approve/reject
+* ``admin``    → ``{viewer, operator, admin}``     — everything, incl. admin routes
+
+RBAC is enforced by the transport layer **only when scoped/role tokens are
+configured** (``DM_API_KEYS_MAP`` with roles, or ``DM_API_SCOPES``); a store of
+plain ``DM_API_KEYS`` tokens stays role-flat (everyone ``operator``) so existing
+auth tests and deployments are unchanged.
 """
 from __future__ import annotations
 
@@ -42,10 +57,46 @@ from typing import Any, Callable
 # core/contracts.py). These are the env vars the TokenStore reads.
 ENV_API_KEYS = "DM_API_KEYS"
 ENV_API_KEYS_MAP = "DM_API_KEYS_MAP"
+ENV_API_SCOPES = "DM_API_SCOPES"
 
 #: HTTP header carrying the bearer token (case-insensitive in practice).
 AUTHORIZATION_HEADER = "Authorization"
 BEARER_PREFIX = "Bearer "
+
+# ---------------------------------------------------------------------- RBAC roles
+#: Canonical role names, weakest -> strongest. A token carries exactly one role;
+#: the role expands to a (hierarchical) scope set via :data:`ROLE_SCOPES`.
+ROLE_VIEWER = "viewer"
+ROLE_OPERATOR = "operator"
+ROLE_ADMIN = "admin"
+
+#: A bare ``DM_API_KEYS`` token keeps read+act access (back-compat) by defaulting
+#: to ``operator`` — never ``viewer`` — so existing single-key deploys are unchanged.
+DEFAULT_ROLE = ROLE_OPERATOR
+
+#: Hierarchical role -> scope expansion. Each stronger role is a strict superset
+#: of the weaker ones, so ``has_scope('viewer')`` is true for operator/admin etc.
+ROLE_SCOPES: dict[str, frozenset[str]] = {
+    ROLE_VIEWER: frozenset({ROLE_VIEWER}),
+    ROLE_OPERATOR: frozenset({ROLE_VIEWER, ROLE_OPERATOR}),
+    ROLE_ADMIN: frozenset({ROLE_VIEWER, ROLE_OPERATOR, ROLE_ADMIN}),
+}
+
+
+def role_to_scopes(role: str | None) -> frozenset[str]:
+    """Expand an RBAC ``role`` name to its hierarchical scope set.
+
+    Unknown / empty roles map to the lone scope equal to the role string (so a
+    custom ``DM_API_SCOPES`` value like ``ops:billing`` still yields a usable
+    ``{billing}`` scope), defaulting to :data:`DEFAULT_ROLE` when blank.
+    """
+    if not role:
+        role = DEFAULT_ROLE
+    role = role.strip().lower()
+    scopes = ROLE_SCOPES.get(role)
+    if scopes is not None:
+        return scopes
+    return frozenset({role})
 
 
 @dataclass(frozen=True)
@@ -88,18 +139,44 @@ def _parse_keys_csv(raw: str) -> list[str]:
     return parts
 
 
-def _parse_keys_map(raw: str) -> dict[str, str]:
-    """Parse ``principal:token`` comma-separated pairs into ``{token: principal}``."""
+def _parse_keys_map(raw: str) -> dict[str, tuple[str, str | None]]:
+    """Parse ``principal:token[:role]`` pairs into ``{token: (principal, role)}``.
+
+    The third ``:role`` field is OPTIONAL (RBAC). Lines without it parse to a
+    ``None`` role (the caller then applies :data:`DEFAULT_ROLE`), so the legacy
+    two-field ``principal:token`` form is fully back-compatible.
+    """
+    mapping: dict[str, tuple[str, str | None]] = {}
+    for chunk in raw.replace("\n", ",").split(","):
+        item = chunk.strip()
+        if not item or ":" not in item:
+            continue
+        parts = [p.strip() for p in item.split(":")]
+        principal = parts[0]
+        token = parts[1] if len(parts) > 1 else ""
+        role = parts[2] if len(parts) > 2 and parts[2] else None
+        if principal and token:
+            mapping[token] = (principal, role)
+    return mapping
+
+
+def _parse_scopes_map(raw: str) -> dict[str, str]:
+    """Parse ``principal:role`` comma-separated pairs into ``{principal: role}``.
+
+    Used by ``DM_API_SCOPES`` to layer a role onto an already-registered
+    principal (e.g. one declared bare in ``DM_API_KEYS_MAP``). Blank / malformed
+    entries are skipped.
+    """
     mapping: dict[str, str] = {}
     for chunk in raw.replace("\n", ",").split(","):
         item = chunk.strip()
         if not item or ":" not in item:
             continue
-        principal, _, token = item.partition(":")
+        principal, _, role = item.partition(":")
         principal = principal.strip()
-        token = token.strip()
-        if principal and token:
-            mapping[token] = principal
+        role = role.strip()
+        if principal and role:
+            mapping[principal] = role
     return mapping
 
 
@@ -118,21 +195,33 @@ class TokenStore:
     _tokens: dict[str, str] = field(default_factory=dict)
     # principal name -> scopes
     _scopes: dict[str, frozenset[str]] = field(default_factory=dict)
+    # principal name -> RBAC role (the role the scopes were expanded from)
+    _roles: dict[str, str] = field(default_factory=dict)
+    #: True once any token was registered with an explicit RBAC role/scope, which
+    #: is the signal the transport layer uses to *enforce* RBAC. A store built from
+    #: plain ``DM_API_KEYS`` (no roles) leaves this False -> role-flat, so existing
+    #: auth tests/deployments behave exactly as before.
+    rbac_enabled: bool = False
 
     # ------------------------------------------------------------------ factories
     @classmethod
     def from_env(cls, environ: dict[str, str] | None = None) -> "TokenStore":
-        """Build from process env (``DM_API_KEYS`` / ``DM_API_KEYS_MAP``).
+        """Build from process env (``DM_API_KEYS`` / ``DM_API_KEYS_MAP`` / ``DM_API_SCOPES``).
 
-        Both sources merge; the named-map form wins on collisions so an operator
-        can give a memorable principal name to a token also listed bare.
+        All sources merge; the named-map form wins on collisions so an operator
+        can give a memorable principal name to a token also listed bare. A third
+        ``:role`` field in ``DM_API_KEYS_MAP`` — or a ``DM_API_SCOPES`` entry for
+        the principal — turns on RBAC enforcement (:attr:`rbac_enabled`).
         """
         env = os.environ if environ is None else environ
         store = cls()
         for token in _parse_keys_csv(env.get(ENV_API_KEYS, "")):
-            store.add(token)  # principal defaults to a fingerprint
-        for token, principal in _parse_keys_map(env.get(ENV_API_KEYS_MAP, "")).items():
-            store.add(token, principal=principal)
+            store.add(token)  # principal defaults to a fingerprint, role -> default
+        for token, (principal, role) in _parse_keys_map(env.get(ENV_API_KEYS_MAP, "")).items():
+            store.add(token, principal=principal, role=role)
+        # Overlay DM_API_SCOPES roles onto principals registered above.
+        for principal, role in _parse_scopes_map(env.get(ENV_API_SCOPES, "")).items():
+            store.set_role(principal, role)
         return store
 
     @classmethod
@@ -152,8 +241,12 @@ class TokenStore:
                     store.add(token)
             raw_map = getattr(settings, "api_keys_map", None)
             if isinstance(raw_map, str):
-                for token, principal in _parse_keys_map(raw_map).items():
-                    store.add(token, principal=principal)
+                for token, (principal, role) in _parse_keys_map(raw_map).items():
+                    store.add(token, principal=principal, role=role)
+            raw_scopes = getattr(settings, "api_scopes", None)
+            if isinstance(raw_scopes, str):
+                for principal, role in _parse_scopes_map(raw_scopes).items():
+                    store.set_role(principal, role)
         return store
 
     # --------------------------------------------------------------------- mutate
@@ -162,18 +255,39 @@ class TokenStore:
         token: str,
         principal: str | None = None,
         scopes: frozenset[str] | set[str] | None = None,
+        role: str | None = None,
     ) -> Principal:
-        """Register ``token``; returns the :class:`Principal` it authenticates."""
+        """Register ``token``; returns the :class:`Principal` it authenticates.
+
+        ``role`` (one of ``viewer``/``operator``/``admin``) expands to a
+        hierarchical scope set and **turns on RBAC enforcement** for the whole
+        store. An explicit ``scopes=`` also enables RBAC. Passing neither leaves
+        the principal role-flat (default-access) so an unconfigured store and the
+        existing auth tests are unchanged.
+        """
         token = token.strip()
         if not token:
             raise ValueError("empty token")
         name = principal or f"key-{_fingerprint(token)}"
         self._tokens[token] = name
-        if scopes:
+        if role is not None:
+            self.set_role(name, role)
+        elif scopes:
             self._scopes[name] = frozenset(scopes)
+            self.rbac_enabled = True
         return Principal(
             name=name, fingerprint=_fingerprint(token), scopes=self._scopes.get(name, frozenset())
         )
+
+    def set_role(self, principal: str, role: str) -> None:
+        """Assign an RBAC ``role`` to ``principal`` and enable RBAC enforcement.
+
+        Expands the role to its hierarchical scope set (:func:`role_to_scopes`).
+        Idempotent; later calls override an earlier role for the same principal.
+        """
+        self._roles[principal] = role.strip().lower()
+        self._scopes[principal] = role_to_scopes(role)
+        self.rbac_enabled = True
 
     # ----------------------------------------------------------------- introspect
     @property
@@ -187,6 +301,10 @@ class TokenStore:
 
     def __len__(self) -> int:
         return len(self._tokens)
+
+    def role_of(self, principal: str) -> str | None:
+        """Return the RBAC role assigned to ``principal`` (or ``None``)."""
+        return self._roles.get(principal)
 
     def verify(self, token: str | None) -> Principal | None:
         """Return the :class:`Principal` for ``token`` or ``None`` if invalid.

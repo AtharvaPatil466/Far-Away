@@ -178,7 +178,10 @@ disastermind/
   observability/ metrics collector + Prometheus exposition + health
   tracing/     span recorder + all-topic trace collector (per-incident latency)
   security/    opt-in API auth + rate limiting + payload validation
-  ml/          XGBoost/sklearn risk models + SHAP; training/ + eval/ (backtest, model cards)
+  ml/          XGBoost/sklearn risk models + SHAP; training on REAL fixtures; eval/
+               (POD/FAR, significance, blocked CV, conformal, fairness, drift);
+               validation/ (real-data multi-hazard validation; docs/validation.md);
+               shadow.py (shadow-mode season journal + external-review export)
   multi_incident/ IncidentManager — concurrent incidents, one DAG per disaster
   ops/         health/readiness, retry, circuit breaker, graceful shutdown, config check
   alerting/    CAP 1.2 emergency-broadcast XML

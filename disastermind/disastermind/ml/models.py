@@ -34,8 +34,9 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import dataclass, field
-from typing import Any, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from ..core.contracts import Module
 from .features import FEATURE_NAMES, FeatureVector
@@ -118,7 +119,7 @@ class RiskModel:
         self._backend_obj: Any = None
 
     # -- training ---------------------------------------------------------
-    def fit(self, X: Sequence[Sequence[float]], y: Sequence[float]) -> "RiskModel":
+    def fit(self, X: Sequence[Sequence[float]], y: Sequence[float]) -> RiskModel:
         """Fit the real backend if available; otherwise mark heuristic-fitted.
 
         Always succeeds: an absent/failing backend leaves the deterministic
@@ -191,14 +192,14 @@ class RiskModel:
         return path
 
     @classmethod
-    def load(cls, path: str) -> "RiskModel":
+    def load(cls, path: str) -> RiskModel:
         """Restore a model from a JSON manifest written by :meth:`save`.
 
         Dispatches to the wrapper class named in the manifest's ``backend``; if
         that backend's library is unavailable the loaded model still answers
         ``predict`` via the heuristic (graceful degradation).
         """
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             manifest = json.load(fh)
         module = Module(manifest["module"])
         backend = manifest.get("backend", "heuristic")

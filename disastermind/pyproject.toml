@@ -22,6 +22,10 @@ storage = ["psycopg[binary]>=3.1", "elasticsearch>=8.12", "minio>=7.2"]
 feeds = ["httpx>=0.27", "feedparser>=6.0"]
 dispatch = ["twilio>=9.0"]
 dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+# Static-analysis tooling used by the CI ``lint`` / ``typecheck`` jobs. Kept out
+# of ``dev`` so the test job stays lean and stdlib-focused; installed explicitly
+# via ``pip install -e .[lint]`` in CI.
+lint = ["ruff>=0.5", "mypy>=1.10"]
 all = [
     "xgboost>=2.0", "scikit-learn>=1.4", "numpy>=1.26", "shap>=0.44",
     "pulp>=2.8", "ortools>=9.9", "shapely>=2.0", "pyproj>=3.6",
@@ -34,3 +38,38 @@ include = ["disastermind*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# --------------------------------------------------------------------------- lint
+# Ruff configuration lives in ``.ruff.toml`` (single source of truth — Ruff
+# prefers that file over a ``[tool.ruff]`` table here, so we keep it there to
+# avoid a silently-ignored duplicate). See ``.ruff.toml`` for rule selection.
+
+# --------------------------------------------------------------------------- types
+# mypy is an ADVISORY gate (CI ``typecheck`` job is continue-on-error). The
+# settings below are deliberately pragmatic, not maximal: they catch obvious
+# mistakes without demanding a fully-annotated codebase. Tighten incrementally.
+[tool.mypy]
+python_version = "3.11"
+files = ["disastermind"]
+# Be lenient: a large, gradually-typed codebase should not be blocked by missing
+# annotations or third-party stubs. These keep mypy useful but non-pedantic.
+ignore_missing_imports = true
+follow_imports = "silent"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+warn_unused_ignores = false
+warn_redundant_casts = true
+warn_unused_configs = true
+no_implicit_optional = true
+show_error_codes = true
+pretty = true
+# Optional/heavy third-party deps are lazy-imported; never require their stubs.
+[[tool.mypy.overrides]]
+module = [
+    "xgboost.*", "sklearn.*", "numpy.*", "shap.*",
+    "pulp.*", "ortools.*", "shapely.*", "pyproj.*",
+    "confluent_kafka.*", "psycopg.*", "elasticsearch.*", "minio.*",
+    "httpx.*", "feedparser.*", "twilio.*", "yaml.*",
+]
+ignore_missing_imports = true

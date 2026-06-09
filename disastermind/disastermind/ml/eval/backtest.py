@@ -27,7 +27,8 @@ from __future__ import annotations
 import json
 import os
 import random
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from ...core.contracts import Module
 from ..registry import get_model

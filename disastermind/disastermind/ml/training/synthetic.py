@@ -34,8 +34,8 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from ...core.contracts import Module
 from ..features import FEATURE_NAMES

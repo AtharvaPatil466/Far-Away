@@ -19,8 +19,6 @@ tests. ``load_model`` restores a persisted artefact and registers it.
 """
 from __future__ import annotations
 
-from typing import Callable
-
 from ..core.contracts import Module
 from .features import FEATURE_NAMES
 from .models import (
@@ -29,7 +27,6 @@ from .models import (
     SklearnRiskModel,
     XGBoostRiskModel,
 )
-
 
 #: Module -> preferred wrapper class (PRD Step 3 model assignment). Each falls
 #: back to the heuristic internally, so this only picks the *attempted* backend.

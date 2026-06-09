@@ -3,9 +3,12 @@
 A model card is a short, structured document that travels with a model so an
 operator never deploys a black box: what it predicts, what it was trained on, how
 it scored on held-out data, what it is *for*, and — critically for a disaster
-system — what its **limitations** are. The headline limitation here is honest:
-these models are trained on **synthetic** data and have **not** been validated on
-real events, so their probabilities inform but never replace a human commander.
+system — what its **limitations** are. Production models are trained on REAL
+historical fixtures (:mod:`disastermind.ml.training.real`) and the full
+real-data evidence (baselines with significance, POD/FAR at the operating
+point, blocked CV, calibration, fairness, tail, drift) lives in
+:mod:`disastermind.ml.validation`; the card still states plainly that
+probabilities inform but never replace a human commander.
 
 :func:`model_card` builds a JSON-serialisable ``dict``; :func:`to_markdown`
 renders it to human-readable Markdown. Both are pure stdlib.
@@ -43,12 +46,17 @@ INTENDED_USE: dict[str, str] = {
 
 #: Limitations every card carries, regardless of module.
 BASE_LIMITATIONS: tuple[str, ...] = (
-    "Trained on synthetic data — NOT validated on real disaster events.",
+    "Trained on real historical fixtures via schema mappings that approximate "
+    "the runtime features (see disastermind.ml.training.real) — full real-data "
+    "validation evidence lives in disastermind.ml.validation, and the system "
+    "must clear shadow-mode review (disastermind.ml.shadow) before outputs "
+    "influence operations.",
     "Outputs are decision support only and never override a human commander.",
     "Falls back to a deterministic heuristic when no ML backend is installed; "
     "metrics then reflect the heuristic, not a learned model.",
-    "Reported metrics are in-distribution (held-out synthetic) and will not "
-    "transfer unchanged to real, shifted, or adversarial inputs.",
+    "Backtest metrics in this card are produced by the synthetic harness when "
+    "invoked from disastermind.ml.eval.backtest and do not substitute for the "
+    "real-data validation report.",
 )
 
 

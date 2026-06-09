@@ -14,6 +14,10 @@ DisasterMind coordination engine from a demo into something you can run on call:
     last orders.
   * :mod:`~disastermind.ops.config_check` — :func:`validate_settings` pre-flight
     configuration validation (offline / lexical).
+  * :mod:`~disastermind.ops.budget` — a :class:`Timer` / :class:`LatencyBudget`
+    context manager (injectable clock; never raises on overrun) and a
+    :class:`ReadinessAggregator` that folds many named readiness signals into one
+    verdict shaped like :func:`readiness`.
 
 Everything here is stdlib-only, deterministic, and inert by default — importing
 ``disastermind.ops`` arms no signal handlers, opens no sockets, and starts no
@@ -21,6 +25,12 @@ threads. You opt in by calling these primitives where you need them.
 """
 from __future__ import annotations
 
+from .budget import (
+    BudgetExceeded,
+    LatencyBudget,
+    ReadinessAggregator,
+    Timer,
+)
 from .config_check import Issue, Severity, errors, is_valid, validate_settings
 from .health import liveness, probe, readiness
 from .retry import (
@@ -53,4 +63,9 @@ __all__ = [
     "Severity",
     "errors",
     "is_valid",
+    # latency budgets & readiness aggregation
+    "Timer",
+    "LatencyBudget",
+    "BudgetExceeded",
+    "ReadinessAggregator",
 ]

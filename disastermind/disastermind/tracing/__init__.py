@@ -24,6 +24,7 @@ from __future__ import annotations
 from .build import build_agents
 from .collector import TraceCollector, all_topics
 from .spans import (
+    OTLP_ENDPOINT_ENV,
     Clock,
     Span,
     SpanRecorder,
@@ -38,6 +39,7 @@ __all__ = [
     "SpanRecorder",
     "trace",
     "get_default_recorder",
+    "OTLP_ENDPOINT_ENV",
     # collector
     "TraceCollector",
     "all_topics",

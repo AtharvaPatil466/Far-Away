@@ -30,6 +30,22 @@ def _family(lines: list[str], name: str, help_text: str, mtype: str = "counter")
     lines.append(f"# TYPE {name} {mtype}")
 
 
+def _fmt(value: float) -> str:
+    """Render a numeric sample value as a valid Prometheus float.
+
+    Integers come out without a trailing ``.0`` (Prometheus accepts both); other
+    floats use a compact ``repr`` that round-trips. ``inf`` maps to ``+Inf``.
+    """
+    f = float(value)
+    if f == float("inf"):
+        return "+Inf"
+    if f == float("-inf"):
+        return "-Inf"
+    if f == int(f):
+        return str(int(f))
+    return repr(f)
+
+
 def render(collector: MetricsCollector) -> str:
     """Render ``collector`` as a Prometheus text-exposition document.
 
@@ -70,6 +86,39 @@ def render(collector: MetricsCollector) -> str:
     dispatches = f"{_PREFIX}_dispatches_total"
     _family(lines, dispatches, "Real dispatch orders executed (PRD Step 8).")
     lines.append(f"{dispatches} {snap['dispatches']}")
+
+    # ---- error / failure counters (additive; zero on healthy traffic) -------
+    errors = f"{_PREFIX}_errors_total"
+    _family(lines, errors, "Messages observed carrying an error/failure marker.")
+    lines.append(f"{errors} {snap.get('errors', 0)}")
+
+    by_error_kind = f"{_PREFIX}_errors_by_kind_total"
+    _family(lines, by_error_kind, "Error observations broken down per kind.")
+    for kind, count in sorted(snap.get("by_error_kind", {}).items()):
+        lines.append(f'{by_error_kind}{{kind="{_escape(kind)}"}} {count}')
+
+    # ---- per-topic message-processing latency histograms --------------------
+    # One Prometheus histogram family per topic: cumulative ``_bucket{le=...}``
+    # samples plus ``_sum`` and ``_count``. The observed value is a logical tick
+    # delta (or an injected clock's delta), never wall-clock seconds in tests.
+    latency = f"{_PREFIX}_message_processing_latency_seconds"
+    _family(
+        lines,
+        latency,
+        "Message-processing latency per topic (logical tick delta).",
+        mtype="histogram",
+    )
+    for topic, hist in sorted(snap.get("latency_by_topic", {}).items()):
+        topic_label = _escape(topic)
+        for bucket in hist["buckets"]:
+            le = bucket["le"]
+            le_str = "+Inf" if le == "+Inf" else _fmt(le)
+            lines.append(
+                f'{latency}_bucket{{topic="{topic_label}",le="{le_str}"}} '
+                f'{bucket["count"]}'
+            )
+        lines.append(f'{latency}_sum{{topic="{topic_label}"}} {_fmt(hist["sum"])}')
+        lines.append(f'{latency}_count{{topic="{topic_label}"}} {hist["count"]}')
 
     uptime = f"{_PREFIX}_collector_uptime_seconds"
     _family(lines, uptime, "Seconds since the metrics collector started.", mtype="gauge")

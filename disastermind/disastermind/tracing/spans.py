@@ -33,12 +33,18 @@ from __future__ import annotations
 
 import functools
 import logging
+import os
 import threading
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
 log = logging.getLogger("disastermind.tracing.spans")
+
+#: Environment variable that opts a recorder into OTLP export. When unset (the
+#: default, including all tests) export is a no-op and the in-memory recorder is
+#: the sole backend — no network is ever contacted (PRD HARD RULE 2 / Step 10).
+OTLP_ENDPOINT_ENV = "DM_OTLP_ENDPOINT"
 
 #: A clock returns a comparable, monotone "tick" (float epoch seconds in prod,
 #: or an injected integer counter in tests). We never compare ticks to wall time.
@@ -100,6 +106,52 @@ class Span:
             "status": self.status,
         }
 
+    def to_otlp(self) -> dict[str, Any]:
+        """Render this span as an OTLP/JSON ``Span`` object (OTel data model).
+
+        Produces the structure used by the OTLP/HTTP JSON protobuf encoding
+        (``traceId``/``spanId``/``parentSpanId``/``startTimeUnixNano``/
+        ``endTimeUnixNano``/``attributes``/``status``). It is a *pure*
+        serialisation — building it contacts no network and needs no SDK, so it
+        is safe to call in any test. The ``incident_id`` is surfaced as a
+        first-class attribute so a backend can correlate by incident.
+        """
+        attrs = dict(self.attributes)
+        if self.incident_id is not None:
+            attrs.setdefault("incident_id", self.incident_id)
+        # OTLP timestamps are unsigned nanoseconds. Our clock ticks are unitless
+        # (logical in tests, seconds in prod); scale by 1e9 so the shape is valid
+        # and self-consistent without claiming wall-clock accuracy.
+        start_ns = int(self.start * 1_000_000_000)
+        end_ns = int(self.end * 1_000_000_000) if self.end is not None else start_ns
+        return {
+            "traceId": (self.incident_id or self.span_id),
+            "spanId": self.span_id,
+            "parentSpanId": self.parent_id or "",
+            "name": self.name,
+            "startTimeUnixNano": start_ns,
+            "endTimeUnixNano": end_ns,
+            "attributes": [
+                {"key": k, "value": _otlp_any_value(v)} for k, v in attrs.items()
+            ],
+            "status": {"code": _OTLP_STATUS.get(self.status, 0), "message": self.status},
+        }
+
+
+#: OTLP ``StatusCode`` enum: 0=UNSET, 1=OK, 2=ERROR.
+_OTLP_STATUS: dict[str, int] = {"ok": 1, "error": 2}
+
+
+def _otlp_any_value(value: Any) -> dict[str, Any]:
+    """Wrap a Python value as an OTLP ``AnyValue`` (string/bool/int/double)."""
+    if isinstance(value, bool):
+        return {"boolValue": value}
+    if isinstance(value, int):
+        return {"intValue": value}
+    if isinstance(value, float):
+        return {"doubleValue": value}
+    return {"stringValue": str(value)}
+
 
 class SpanRecorder:
     """Thread-safe in-memory store of :class:`Span` objects.
@@ -121,6 +173,9 @@ class SpanRecorder:
         self._stack = threading.local()  # per-thread list[Span] of open spans
         # OTel is opt-in and lazily resolved; None means "in-memory only".
         self._otel_tracer: Any | None = None
+        # OTLP exporter is opt-in (DM_OTLP_ENDPOINT). None means "no export".
+        self._otlp_endpoint: str | None = None
+        self._otlp_exporter: Callable[[list[Span]], None] | None = None
 
     # ------------------------------------------------------------ default clock
     def _default_clock(self) -> float:
@@ -192,6 +247,7 @@ class SpanRecorder:
             if stack:
                 stack.pop()
         self._export_otel(span)
+        self._export_otlp(span)
         return span
 
     # ------------------------------------------------------------------ queries
@@ -259,6 +315,137 @@ class SpanRecorder:
             otel_span.end()
         except Exception:
             log.exception("opentelemetry export failed for span %s", span.span_id)
+
+    # --------------------------------------------------------------- OTLP (opt-in)
+    def to_otlp(self, spans: list[Span] | None = None) -> dict[str, Any]:
+        """Serialise spans into an OTLP ``ExportTraceServiceRequest`` envelope.
+
+        Returns the canonical ``{"resourceSpans": [...]}`` JSON structure of the
+        OTLP trace protocol, with a single resource (``service.name``) and one
+        scope (``disastermind.tracing``). Pure serialisation — no network, no SDK
+        — so it is always safe to call (the default test path uses exactly this).
+        ``spans`` defaults to every recorded span.
+        """
+        src = self.spans if spans is None else spans
+        with self._lock:
+            otlp_spans = [s.to_otlp() for s in list(src)]
+        return {
+            "resourceSpans": [
+                {
+                    "resource": {
+                        "attributes": [
+                            {
+                                "key": "service.name",
+                                "value": {"stringValue": "disastermind"},
+                            }
+                        ]
+                    },
+                    "scopeSpans": [
+                        {
+                            "scope": {"name": "disastermind.tracing"},
+                            "spans": otlp_spans,
+                        }
+                    ],
+                }
+            ]
+        }
+
+    @property
+    def otlp_enabled(self) -> bool:
+        """True iff an OTLP endpoint/exporter is wired (opt-in)."""
+        return self._otlp_endpoint is not None or self._otlp_exporter is not None
+
+    def enable_otlp_export(
+        self,
+        endpoint: str | None = None,
+        *,
+        exporter: Callable[[list[Span]], None] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> bool:
+        """Opt into OTLP span export; return True iff export is now active.
+
+        Resolution order (all opt-in, all network-free until *you* invoke a
+        real exporter):
+
+          * an explicit ``exporter`` callable is used verbatim (a test injects a
+            stub here — the no-network path);
+          * otherwise an ``endpoint`` (or :data:`OTLP_ENDPOINT_ENV` from
+            ``env``/the process environment) wires the lazy SDK exporter built by
+            :meth:`_build_otlp_exporter`.
+
+        With neither an endpoint nor an exporter, export stays **off** and this
+        returns ``False`` — the in-memory recorder is the sole backend.
+        """
+        if exporter is not None:
+            self._otlp_exporter = exporter
+            self._otlp_endpoint = endpoint
+            return True
+        environ = env if env is not None else os.environ
+        resolved = endpoint or environ.get(OTLP_ENDPOINT_ENV)
+        if not resolved:
+            return False
+        self._otlp_endpoint = resolved
+        self._otlp_exporter = self._build_otlp_exporter(resolved)
+        return self._otlp_exporter is not None
+
+    def _build_otlp_exporter(
+        self, endpoint: str
+    ) -> Callable[[list[Span]], None] | None:
+        """Build a real OTLP/HTTP exporter via the lazy OTel SDK, or ``None``.
+
+        The OpenTelemetry SDK is imported *inside* this method and wrapped in
+        ``try/except`` so a missing SDK degrades silently to no export (PRD HARD
+        RULE 2). Nothing here opens a socket — a request is made only later, if
+        the caller actually flushes through the returned callable.
+        """
+        try:  # pragma: no cover - exercised only when the OTel SDK is installed
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore
+                OTLPSpanExporter,
+            )
+
+            sdk_exporter = OTLPSpanExporter(endpoint=endpoint)
+
+            def _export(spans: list[Span]) -> None:  # pragma: no cover
+                # We hand OTLP/JSON to the SDK exporter only when flushed; the
+                # SDK owns the actual transport. Failures are swallowed so
+                # tracing never takes the system down (Step 10).
+                try:
+                    sdk_exporter.export(spans)  # SDK accepts SDK span objects
+                except Exception:
+                    log.exception("OTLP export failed for %d spans", len(spans))
+
+            return _export
+        except Exception:
+            log.info(
+                "opentelemetry OTLP exporter unavailable; spans stay in-memory only"
+            )
+            return None
+
+    def _export_otlp(self, span: Span) -> None:
+        """Push a single closed span through the wired OTLP exporter, if any."""
+        exporter = self._otlp_exporter
+        if exporter is None:
+            return
+        try:
+            exporter([span])
+        except Exception:  # pragma: no cover - exporter is defensive itself
+            log.exception("OTLP span export failed for %s", span.span_id)
+
+    def flush_otlp(self) -> int:
+        """Flush *all* recorded spans through the OTLP exporter; return count.
+
+        A no-op (returns 0) when export is not enabled. Useful for batch export
+        at shutdown. Network is contacted only if a *real* exporter is wired and
+        the endpoint is reachable — never in the default/test path.
+        """
+        exporter = self._otlp_exporter
+        if exporter is None:
+            return 0
+        with self._lock:
+            batch = list(self.spans)
+        if batch:
+            exporter(batch)
+        return len(batch)
 
 
 #: Process-wide default recorder, used when :func:`trace` is called without an

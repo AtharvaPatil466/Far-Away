@@ -6,7 +6,9 @@ artefact; this module *creates* those artefacts.
 
 ``train_all(out_dir, seed=0)`` does, for each module A/B/C:
 
-  1. build a deterministic synthetic ``(X, y)`` (:mod:`.synthetic`),
+  1. build a deterministic REAL training table (:mod:`.real` — USGS quakes,
+     GloFAS/ERA5 floods, FPA-FOD/ERA5 wildfires; ``source="synthetic"`` keeps
+     the legacy generator available for tests, never for shipped artefacts),
   2. obtain the module's wrapper via :func:`disastermind.ml.get_model`,
   3. ``.fit(X, y)`` — a real backend (xgboost/sklearn/numpy) trains if installed,
      otherwise the wrapper stays on its deterministic stdlib heuristic (it never
@@ -30,6 +32,7 @@ from ...core.contracts import Module
 from ..features import FEATURE_NAMES
 from ..models import RiskModel
 from ..registry import get_model
+from .real import make_real_dataset
 from .synthetic import make_dataset
 
 #: Modules trained, in stable A/B/C order.
@@ -62,16 +65,26 @@ def train_module(
     out_dir: str,
     module: Module,
     *,
-    n: int = DEFAULT_N,
+    n: int | None = DEFAULT_N,
     seed: int = 0,
+    source: str = "real",
 ) -> dict[str, Any]:
     """Fit + save one module's model; return its manifest entry.
 
-    Uses a *fresh* wrapper (``get_model(..., fresh=True)``) so repeated training
-    runs in one process never inherit a previously-fitted cached instance — the
-    artefact reflects exactly this run's synthetic data.
+    ``source="real"`` (the default, and the only mode used for shipped
+    artefacts) trains on the committed real fixtures via
+    :func:`disastermind.ml.training.real.make_real_dataset`, with ``n`` as a
+    stratified row cap; ``source="synthetic"`` keeps the legacy generator for
+    unit tests that need a controllable signal. Uses a *fresh* wrapper
+    (``get_model(..., fresh=True)``) so repeated training runs in one process
+    never inherit a previously-fitted cached instance.
     """
-    X, y = make_dataset(module, n=n, seed=seed)
+    if source == "real":
+        X, y = make_real_dataset(module, n=n)
+    elif source == "synthetic":
+        X, y = make_dataset(module, n=n if n is not None else DEFAULT_N, seed=seed)
+    else:
+        raise ValueError(f"unknown training source {source!r}")
     model: RiskModel = get_model(module, fresh=True)
     model.fit(X, y)
     path = artifact_path(out_dir, module)
@@ -82,13 +95,16 @@ def train_module(
         "backend": model.backend,
         "backend_active": model._backend_obj is not None,
         "fitted": model.fitted,
-        "n_train": n,
+        "n_train": len(y),
+        "data_source": source,
         "seed": seed,
         "feature_names": list(FEATURE_NAMES[module]),
     }
 
 
-def train_all(out_dir: str, *, n: int = DEFAULT_N, seed: int = 0) -> dict[str, Any]:
+def train_all(
+    out_dir: str, *, n: int | None = DEFAULT_N, seed: int = 0, source: str = "real"
+) -> dict[str, Any]:
     """Train + persist all three module models under ``out_dir``.
 
     Returns a manifest ``dict`` with a per-module ``models`` list, the ``out_dir``
@@ -97,12 +113,13 @@ def train_all(out_dir: str, *, n: int = DEFAULT_N, seed: int = 0) -> dict[str, A
     """
     out_dir = os.path.abspath(out_dir)
     os.makedirs(out_dir, exist_ok=True)
-    entries = [train_module(out_dir, m, n=n, seed=seed) for m in MODULES]
+    entries = [train_module(out_dir, m, n=n, seed=seed, source=source) for m in MODULES]
     manifest: dict[str, Any] = {
         "format": MANIFEST_FORMAT,
         "out_dir": out_dir,
         "seed": seed,
         "n_train": n,
+        "data_source": source,
         "models": entries,
     }
     with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as fh:

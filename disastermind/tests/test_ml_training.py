@@ -31,6 +31,18 @@ from disastermind.ml.training import (
 ALL_MODULES = (Module.CYCLONE_FLOOD, Module.EARTHQUAKE, Module.FIRE_COLLAPSE)
 
 
+@pytest.fixture(autouse=True)
+def _isolated_registry():
+    """train_module/train_all cache fitted wrappers globally (real-data fits
+    with a live sklearn backend genuinely change predictions); keep the suite
+    hermetic so later pipeline tests see the stock heuristics."""
+    from disastermind.ml.registry import reset_registry
+
+    reset_registry()
+    yield
+    reset_registry()
+
+
 # --------------------------------------------------------------------------- synthetic
 @pytest.mark.parametrize("module", ALL_MODULES)
 def test_synthetic_shape_matches_schema(module: Module) -> None:
