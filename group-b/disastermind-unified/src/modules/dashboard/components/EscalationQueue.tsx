@@ -4,6 +4,7 @@ import {
   type Escalation,
   type AgentMessage,
 } from '../../../lib/disasterApi'
+import { approveEscalation as backendApprove, rejectEscalation as backendReject } from '../../../services/backendService'
 import { useEscalations } from '../../../hooks/useEscalations'
 import { EscalationMemoCard } from '../../../components/EscalationMemoCard'
 
@@ -186,6 +187,7 @@ export function EscalationQueue({
     if (item.id === 'evac-zone-7-escalation') {
       onApproveZone7?.()
     }
+    void backendApprove(item.id)
     if (!backendOnline || item.source === 'mock') {
       resolveOldEscalation(item.id, 'approved')
       return
@@ -202,6 +204,7 @@ export function EscalationQueue({
     }
     const reason = window.prompt('Override reason')
     if (reason === null) return
+    void backendReject(item.id, 'CDR-SOHAM', reason)
     if (await disasterApi.rejectEscalation(item.id, reason)) {
       resolveOldEscalation(item.id, 'overridden')
     }
@@ -213,6 +216,8 @@ export function EscalationQueue({
       onApproveZone7?.()
     }
     approve(id)
+    // Fire backend REST call in background
+    void backendApprove(id)
   }
 
   return (

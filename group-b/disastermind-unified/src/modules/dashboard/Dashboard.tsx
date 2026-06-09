@@ -12,7 +12,13 @@ import { MapLegend } from './components/MapLegend'
 import { ResourcePanel } from './components/ResourcePanel'
 import { useDemoTimeline } from '../../lib/demoTimeline'
 import { SYNTHETIC_MAP_STATE, IMD_ALERTS } from '../../lib/mapTypes'
-import type { MapState } from '../../lib/mapTypes'
+import type { MapState, Shelter, EvacRouteShelter } from '../../lib/mapTypes'
+import { useBackendWS } from '../../hooks/useBackendWS'
+import type { BackendWSMessage } from '../../hooks/useBackendWS'
+import { BackendStatusBadge } from '../../components/BackendStatusBadge'
+import { PostIncidentReport } from '../../components/PostIncidentReport'
+import type { AuditEntry } from '../../services/reportService'
+import { fetchHealth } from '../../services/backendService'
 
 function AlertTicker() {
   const alerts = IMD_ALERTS
@@ -94,6 +100,154 @@ export function Dashboard() {
 
   const { overrides, submitOverride } = useOverrides()
   const [overrideLogOpen, setOverrideLogOpen] = useState(false)
+  const [liveShelters, setLiveShelters] = useState<Shelter[] | undefined>(undefined)
+  const [backendWSLastMsgAt, setBackendWSLastMsgAt] = useState<number>(Date.now())
+
+  const [showReport, setShowReport] = useState(false)
+
+  // Assemble audit log from available data sources
+  const auditLog: AuditEntry[] = useMemo(() => {
+    const entries: AuditEntry[] = []
+
+    // Override records
+    overrides.forEach(r => {
+      entries.push({
+        id: r.id,
+        timestamp: r.timestamp,
+        agentId: r.agentType,
+        action: 'OVERRIDE',
+        operatorId: r.commanderId,
+        note: r.overrideReason,
+        payload: { originalAction: r.originalAction, propagatedTo: r.propagatedTo },
+      })
+    })
+
+    // Escalation records
+    // (escalations are managed in useEscalations inside EscalationQueue,
+    //  not directly accessible here. We add what we can from the demo state.)
+    if (timelineEscalations.length > 0) {
+      timelineEscalations.forEach(esc => {
+        if (zone7OverrideState === 'approved') {
+          entries.push({
+            id: `esc-approve-${Date.now()}`,
+            timestamp: Date.now(),
+            agentId: 'COMMANDER-AI',
+            action: 'APPROVE',
+            operatorId: 'CDR-SOHAM',
+            note: esc.situation,
+            payload: esc,
+          })
+        }
+        if (zone7OverrideState === 'auto-executing') {
+          entries.push({
+            id: `esc-auto-${Date.now()}`,
+            timestamp: Date.now(),
+            agentId: 'COMMANDER-AI',
+            action: 'AUTO_EXECUTED',
+            note: `Auto-executed: ${esc.situation}`,
+            payload: esc,
+          })
+        }
+      })
+    }
+
+    entries.sort((a, b) => b.timestamp - a.timestamp)
+    return entries
+  }, [overrides, timelineEscalations, zone7OverrideState])
+
+  // Health check on mount
+  useEffect(() => {
+    fetchHealth().then(ok => {
+      if (ok) {
+        console.log('Group A backend: LIVE — far-away-production.up.railway.app')
+      } else {
+        console.log('Group A backend: OFFLINE — using mock data')
+      }
+    })
+  }, [])
+
+  // Backend WebSocket for live message stream
+  const { connectionState: backendWSState } = useBackendWS((msg: BackendWSMessage) => {
+    // Update last message timestamp for staleness detection
+    setBackendWSLastMsgAt(Date.now())
+
+    // Log all non-routine frames
+    if (msg.type !== 'acknowledgement') {
+      console.debug('[BackendWS]', msg.topic, msg.type, msg.sender)
+    }
+
+    // instruction messages → prepend to agent feed
+    if (msg.type === 'instruction') {
+      const agentMsg: AgentMessage = {
+        id: msg.id,
+        sender: msg.sender,
+        recipient: msg.recipient,
+        type: 'instruction',
+        priority: msg.priority as 1 | 2 | 3 | 4 | 5,
+        payload: msg.payload,
+        reasoning: msg.reasoning,
+        ttl_seconds: msg.ttl_seconds,
+        topic: msg.topic,
+        incident_id: msg.incident_id,
+        module: msg.module as 'A' | 'B' | 'C' | 'ALL',
+        escalation_trigger: msg.escalation_trigger,
+        timestamp: msg.timestamp,
+      }
+      setLatestMessage(agentMsg)
+      setLastMessageTime(formatStatusTime(msg.timestamp))
+      recordMessage()
+    }
+
+    // escalation messages — handled by EscalationQueue via incomingMessage
+    if (msg.type === 'escalation') {
+      const escMsg: AgentMessage = {
+        id: msg.id,
+        sender: msg.sender,
+        recipient: msg.recipient,
+        type: 'escalation',
+        priority: msg.priority as 1 | 2 | 3 | 4 | 5,
+        payload: msg.payload,
+        reasoning: msg.reasoning,
+        ttl_seconds: msg.ttl_seconds,
+        topic: msg.topic,
+        incident_id: msg.incident_id,
+        module: msg.module as 'A' | 'B' | 'C' | 'ALL',
+        escalation_trigger: msg.escalation_trigger,
+        timestamp: msg.timestamp,
+      }
+      setLatestMessage(escMsg)
+    }
+
+    // tier2.routing_plan → update live shelter markers
+    if (msg.topic === 'tier2.routing_plan') {
+      const payloadShelters = msg.payload?.shelters as EvacRouteShelter[] | undefined
+      if (payloadShelters && Array.isArray(payloadShelters)) {
+        setLiveShelters(prev => {
+          const merged = prev ? [...prev] : []
+          payloadShelters.forEach(es => {
+            const idx = merged.findIndex(s => s.id === es.shelter_id)
+            const shelter: Shelter = {
+              id: es.shelter_id,
+              name: es.name,
+              district: '', // not provided by EvacRoute
+              lat: es.location.lat,
+              lon: es.location.lon,
+              capacity: es.capacity,
+              occupied: es.current_occupancy ?? 0,
+              status: es.status === 'full' ? 'FULL' : es.status === 'closed' ? 'CLOSED' : 'OPEN',
+              facilities: [],
+            }
+            if (idx >= 0) {
+              merged[idx] = shelter
+            } else {
+              merged.push(shelter)
+            }
+          })
+          return merged
+        })
+      }
+    }
+  })
 
   // Demo Timeline callbacks
   const {
@@ -366,6 +520,29 @@ export function Dashboard() {
         <span>{connectionState === 'connected' ? 'WS LIVE' : connectionState === 'connecting' ? 'WS CONNECTING...' : 'WS RECONNECTING...'}</span>
         <span className="status-separator">|</span>
         <span>LAST MSG {lastMessageTime}</span>
+        <span className="status-separator">|</span>
+        <BackendStatusBadge
+          connectionState={backendWSState}
+          lastMessageTime={backendWSLastMsgAt}
+        />
+        <button
+          type="button"
+          onClick={() => setShowReport(true)}
+          style={{
+            marginLeft: '12px',
+            padding: '4px 14px',
+            fontSize: '11px',
+            fontWeight: 600,
+            background: '#6366f1',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            letterSpacing: '0.03em',
+          }}
+        >
+          Generate Report
+        </button>
         {!status.backendOnline && (
           <>
             <span className="status-separator">|</span>
@@ -400,7 +577,7 @@ export function Dashboard() {
         </aside>
         <section className="center-column" aria-label="Operational map">
           <div style={{ position: 'relative', height: '100%' }}>
-            <LiveMap mapState={mapState} />
+            <LiveMap mapState={mapState} liveShelters={liveShelters} />
             <MapLegend />
           </div>
         </section>
@@ -489,6 +666,14 @@ export function Dashboard() {
           />
         </aside>
       </section>
+
+      {/* Post-Incident Report Modal */}
+      {showReport && (
+        <PostIncidentReport
+          auditLog={auditLog}
+          onClose={() => setShowReport(false)}
+        />
+      )}
     </main>
   )
 }

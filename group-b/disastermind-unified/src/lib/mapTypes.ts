@@ -140,6 +140,16 @@ export interface EscalationItem {
   resolvedAt?: number;
 }
 
+// ── EvacRoute shelter (from WebSocket tier2.routing_plan payload) ───────────
+export interface EvacRouteShelter {
+  shelter_id: string
+  name: string
+  location: { lat: number; lon: number }
+  capacity: number
+  current_occupancy?: number
+  status: 'open' | 'full' | 'closed'
+}
+
 // ── Shelter database ──────────────────────────────────────────────────────────
 export interface Shelter {
   id: string

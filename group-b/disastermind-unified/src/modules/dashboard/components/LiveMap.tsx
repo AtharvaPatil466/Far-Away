@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
 import { SYNTHETIC_MAP_STATE, ODISHA_SHELTERS, IMD_ALERTS } from '../../../lib/mapTypes'
-import type { MapState, GpsReading } from '../../../lib/mapTypes'
+import type { MapState, GpsReading, Shelter } from '../../../lib/mapTypes'
 
 // Team status colours
 const STATUS_COLOUR: Record<string, string> = {
@@ -29,10 +29,11 @@ function makeTeamEl(team: GpsReading): HTMLDivElement {
 
 interface LiveMapProps {
   mapState?: MapState
+  liveShelters?: Shelter[]
   className?: string
 }
 
-export function LiveMap({ mapState, className }: LiveMapProps) {
+export function LiveMap({ mapState, liveShelters, className }: LiveMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const markersRef = useRef<Record<string, maplibregl.Marker>>({})
@@ -272,6 +273,35 @@ export function LiveMap({ mapState, className }: LiveMapProps) {
       markersRef.current = {}
     }
   }, [])
+
+  // Update shelter markers when liveShelters changes
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return
+    const map = mapRef.current
+    const source = map.getSource('shelters') as maplibregl.GeoJSONSource | undefined
+    if (!source || !liveShelters) return
+
+    source.setData({
+      type: 'FeatureCollection',
+      features: liveShelters.map(s => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: {
+          id: s.id,
+          name: s.name,
+          district: s.district,
+          capacity: s.capacity,
+          occupied: s.occupied,
+          status: s.status,
+          pct: Math.round((s.occupied / s.capacity) * 100),
+          color: s.status === 'CLOSED' ? '#475569'
+            : s.status === 'FULL' ? '#ef4444'
+            : s.occupied / s.capacity > 0.8 ? '#f97316'
+            : '#22c55e',
+        },
+      })),
+    })
+  }, [mapReady, liveShelters])
 
   // Update layers when state changes
   useEffect(() => {
