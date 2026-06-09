@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { formatAgentName, extractMessageText, priorityToSeverity } from '../../../lib/disasterApi'
 import type { AgentMessage, WSConnectionState } from '../../../lib/disasterApi'
+import { ShapBadges } from '../../../components/ShapBadges'
+import { SYNTHETIC_SHAP, DEFAULT_SHAP } from '../../../lib/mapTypes'
+import type { AgentDecisionShap } from '../../../lib/mapTypes'
 
 type AgentEntry = {
   id: string
@@ -11,6 +14,7 @@ type AgentEntry = {
   detail: string
   severity?: 'critical' | 'high' | 'medium' | 'low' | 'info'
   isNew?: boolean
+  shap?: AgentDecisionShap
 }
 
 type AgentFeedProps = {
@@ -190,6 +194,7 @@ function mapMessageToEntry(message: AgentMessage): AgentEntry {
 export function AgentFeed({ connectionState, incomingMessage, customEntry }: AgentFeedProps) {
   const [feedEntries, setFeedEntries] = useState<AgentEntry[]>(initialEntries)
   const [openEntry, setOpenEntry] = useState<string | null>('initial-064211')
+  const [showShap, setShowShap] = useState(true)
   const feedListRef = useRef<HTMLDivElement | null>(null)
   const poolIndexRef = useRef(0)
   const liveIdRef = useRef(0)
@@ -298,14 +303,32 @@ export function AgentFeed({ connectionState, incomingMessage, customEntry }: Age
     <section className="panel agent-panel">
       <div className="panel-title">
         <h2>AGENT ACTIVITY</h2>
-        <span
-          className="live-badge"
-          style={{
-            color: connectionState === 'connected' ? '#00e676' : connectionState === 'reconnecting' ? '#ffaa00' : '#ff3b3b',
-          }}
-        >
-          ● {connectionLabels[connectionState]}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button
+            onClick={() => setShowShap(s => !s)}
+            style={{
+              padding: '2px 8px',
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              background: showShap ? 'rgba(59,130,246,0.15)' : 'transparent',
+              border: `1px solid ${showShap ? 'rgba(59,130,246,0.4)' : 'rgba(255,255,255,0.1)'}`,
+              color: showShap ? '#60a5fa' : '#64748b',
+              borderRadius: '3px',
+              cursor: 'pointer',
+            }}
+          >
+            {showShap ? '◈ EXPLAIN ON' : '◈ EXPLAIN OFF'}
+          </button>
+          <span
+            className="live-badge"
+            style={{
+              color: connectionState === 'connected' ? '#00e676' : connectionState === 'reconnecting' ? '#ffaa00' : '#ff3b3b',
+            }}
+          >
+            ● {connectionLabels[connectionState]}
+          </span>
+        </div>
       </div>
       <div className="feed-list" ref={feedListRef}>
         {feedEntries.map((entry) => {
@@ -325,7 +348,16 @@ export function AgentFeed({ connectionState, incomingMessage, customEntry }: Age
                 <ChevronDown size={16} className="chevron" />
               </div>
               <p>{entry.summary}</p>
-              {isOpen && <div className="reasoning">{entry.detail}</div>}
+              {isOpen && (
+                <>
+                  <div className="reasoning">{entry.detail}</div>
+                  {showShap && (
+                    <ShapBadges
+                      shap={entry.shap ?? SYNTHETIC_SHAP[entry.agent] ?? DEFAULT_SHAP}
+                    />
+                  )}
+                </>
+              )}
             </button>
           )
         })}
