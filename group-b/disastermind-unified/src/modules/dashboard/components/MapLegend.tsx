@@ -43,6 +43,35 @@ export function MapLegend() {
         <span style={{ width: 20, height: 8, background: 'linear-gradient(to right, rgba(0,255,255,0.5), rgba(255,0,0,0.9))', display: 'inline-block', borderRadius: 2 }} />
         Risk heatmap
       </div>
+      {/* Shelters */}
+      <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+        <div style={{ fontSize: '8px', letterSpacing: '0.1em', color: '#475569', marginBottom: '4px' }}>SHELTERS</div>
+        {[
+          { color: '#22c55e', label: 'Open' },
+          { color: '#f97316', label: '>80% full' },
+          { color: '#ef4444', label: 'Full' },
+          { color: '#475569', label: 'Closed' },
+        ].map(({ color, label }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+            <span style={{ fontSize: '9px', color: '#94a3b8' }}>{label}</span>
+          </div>
+        ))}
+      </div>
+      {/* IMD Alerts */}
+      <div style={{ marginTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+        <div style={{ fontSize: '8px', letterSpacing: '0.1em', color: '#475569', marginBottom: '4px' }}>IMD ALERTS</div>
+        {[
+          { color: '#ef4444', label: 'Red — Extreme' },
+          { color: '#f97316', label: 'Orange — Severe' },
+          { color: '#eab308', label: 'Yellow — Watch' },
+        ].map(({ color, label }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+            <div style={{ width: '10px', height: '6px', borderRadius: '2px', background: color, opacity: 0.7, flexShrink: 0 }} />
+            <span style={{ fontSize: '9px', color: '#94a3b8' }}>{label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

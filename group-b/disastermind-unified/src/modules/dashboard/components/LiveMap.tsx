@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
-import { SYNTHETIC_MAP_STATE } from '../../../lib/mapTypes'
+import { SYNTHETIC_MAP_STATE, ODISHA_SHELTERS, IMD_ALERTS } from '../../../lib/mapTypes'
 import type { MapState, GpsReading } from '../../../lib/mapTypes'
 
 // Team status colours
@@ -103,6 +103,163 @@ export function LiveMap({ mapState, className }: LiveMapProps) {
           'line-dasharray': [4, 2],
         },
       })
+
+      // ── IMD Alert circles ──────────────────────────────────────────────────────
+      map.addSource('imd-alerts', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: IMD_ALERTS.map(alert => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [alert.lon, alert.lat] },
+            properties: {
+              id: alert.id,
+              severity: alert.severity,
+              type: alert.type,
+              headline: alert.headline,
+              radiusKm: alert.radiusKm,
+              color: alert.severity === 'RED' ? '#ef4444'
+                : alert.severity === 'ORANGE' ? '#f97316'
+                : '#eab308',
+            },
+          })),
+        },
+      })
+
+      map.addLayer({
+        id: 'imd-alert-fill',
+        type: 'circle',
+        source: 'imd-alerts',
+        paint: {
+          'circle-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            6, ['/', ['get', 'radiusKm'], 2],
+            10, ['/', ['get', 'radiusKm'], 0.5],
+          ],
+          'circle-color': ['get', 'color'],
+          'circle-opacity': 0.12,
+          'circle-stroke-color': ['get', 'color'],
+          'circle-stroke-width': 1.5,
+          'circle-stroke-opacity': 0.6,
+        },
+      })
+
+      // ── Shelter markers ────────────────────────────────────────────────────────
+      map.addSource('shelters', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: ODISHA_SHELTERS.map(s => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+            properties: {
+              id: s.id,
+              name: s.name,
+              district: s.district,
+              capacity: s.capacity,
+              occupied: s.occupied,
+              status: s.status,
+              pct: Math.round((s.occupied / s.capacity) * 100),
+              color: s.status === 'CLOSED' ? '#475569'
+                : s.status === 'FULL' ? '#ef4444'
+                : s.occupied / s.capacity > 0.8 ? '#f97316'
+                : '#22c55e',
+            },
+          })),
+        },
+      })
+
+      map.addLayer({
+        id: 'shelter-circles',
+        type: 'circle',
+        source: 'shelters',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': ['get', 'color'],
+          'circle-opacity': 0.9,
+          'circle-stroke-color': '#0f172a',
+          'circle-stroke-width': 1.5,
+        },
+      })
+
+      // Shelter label — "S"
+      map.addLayer({
+        id: 'shelter-labels',
+        type: 'symbol',
+        source: 'shelters',
+        layout: {
+          'text-field': 'S',
+          'text-size': 9,
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-anchor': 'center',
+          'text-offset': [0, 0.05],
+        },
+        paint: {
+          'text-color': '#ffffff',
+        },
+      })
+
+      // Shelter click popup
+      map.on('click', 'shelter-circles', (e: any) => {
+        const props = e.features[0].properties
+        const coords = e.features[0].geometry.coordinates.slice() as [number, number]
+        const pct = props.pct
+        const statusColor = props.status === 'CLOSED' ? '#475569'
+          : props.status === 'FULL' ? '#ef4444'
+          : pct > 80 ? '#f97316'
+          : '#22c55e'
+
+        new maplibregl.Popup({ closeButton: true, maxWidth: '220px' })
+          .setLngLat(coords)
+          .setHTML(`
+            <div style="font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0;padding:4px 2px;">
+              <div style="font-weight:700;font-size:12px;margin-bottom:4px;color:#f8fafc;">${props.name}</div>
+              <div style="color:#94a3b8;margin-bottom:6px;">${props.district} District</div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span>Status</span>
+                <span style="font-weight:700;color:${statusColor}">${props.status}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span>Occupancy</span>
+                <span style="font-weight:700;color:${statusColor}">${props.occupied} / ${props.capacity} (${pct}%)</span>
+              </div>
+              <div style="background:rgba(255,255,255,0.08);border-radius:3px;height:4px;margin-top:6px;">
+                <div style="background:${statusColor};height:4px;border-radius:3px;width:${Math.min(pct,100)}%;"></div>
+              </div>
+            </div>
+          `)
+          .addTo(map)
+      })
+
+      map.on('mouseenter', 'shelter-circles', () => { map.getCanvas().style.cursor = 'pointer' })
+      map.on('mouseleave', 'shelter-circles', () => { map.getCanvas().style.cursor = '' })
+
+      // IMD alert click popup
+      map.on('click', 'imd-alert-fill', (e: any) => {
+        const props = e.features[0].properties
+        const coords = e.features[0].geometry.coordinates.slice() as [number, number]
+        const severityColor = props.severity === 'RED' ? '#ef4444'
+          : props.severity === 'ORANGE' ? '#f97316' : '#eab308'
+
+        new maplibregl.Popup({ closeButton: true, maxWidth: '240px' })
+          .setLngLat(coords)
+          .setHTML(`
+            <div style="font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0;padding:4px 2px;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                <span style="font-weight:700;font-size:10px;color:${severityColor};letter-spacing:0.08em;">
+                  ⚠ IMD ${props.severity} ALERT
+                </span>
+              </div>
+              <div style="font-weight:600;font-size:11px;margin-bottom:4px;color:#f8fafc;">${props.type.replace('_',' ')}</div>
+              <div style="color:#94a3b8;font-size:10px;line-height:1.5;">${props.headline}</div>
+              <div style="margin-top:6px;color:#64748b;font-size:9px;">Radius: ${props.radiusKm}km</div>
+            </div>
+          `)
+          .addTo(map)
+      })
+
+      map.on('mouseenter', 'imd-alert-fill', () => { map.getCanvas().style.cursor = 'pointer' })
+      map.on('mouseleave', 'imd-alert-fill', () => { map.getCanvas().style.cursor = '' })
 
       setMapReady(true)
     })

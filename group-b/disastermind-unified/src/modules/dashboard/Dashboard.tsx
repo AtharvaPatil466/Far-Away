@@ -10,8 +10,53 @@ import { LiveMap } from './components/LiveMap'
 import { MapLegend } from './components/MapLegend'
 import { ResourcePanel } from './components/ResourcePanel'
 import { useDemoTimeline } from '../../lib/demoTimeline'
-import { SYNTHETIC_MAP_STATE } from '../../lib/mapTypes'
+import { SYNTHETIC_MAP_STATE, IMD_ALERTS } from '../../lib/mapTypes'
 import type { MapState } from '../../lib/mapTypes'
+
+function AlertTicker() {
+  const alerts = IMD_ALERTS
+  const [idx, setIdx] = useState(0)
+
+  useEffect(() => {
+    const t = setInterval(() => setIdx(i => (i + 1) % alerts.length), 5000)
+    return () => clearInterval(t)
+  }, [])
+
+  const alert = alerts[idx]
+  const color = alert.severity === 'RED' ? '#ef4444'
+    : alert.severity === 'ORANGE' ? '#f97316' : '#eab308'
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      padding: '5px 16px',
+      background: `linear-gradient(90deg, ${color}18 0%, transparent 100%)`,
+      borderBottom: `1px solid ${color}30`,
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      overflow: 'hidden',
+    }}>
+      <span style={{
+        color,
+        fontWeight: 700,
+        fontSize: '9px',
+        letterSpacing: '0.1em',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      }}>
+        ⚠ IMD {alert.severity}
+      </span>
+      <span style={{ color: '#cbd5e1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {alert.headline}
+      </span>
+      <span style={{ color: '#475569', fontSize: '9px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        {alert.district}
+      </span>
+    </div>
+  )
+}
 
 function formatStatusTime(timestamp: string) {
   const parsed = new Date(timestamp)
@@ -338,6 +383,7 @@ export function Dashboard() {
           </>
         )}
       </div>
+      <AlertTicker />
       <section className="dashboard-grid">
         <aside className="side-column left-column">
           <ResourcePanel boatsAdjustment={boatsAdjustment} />

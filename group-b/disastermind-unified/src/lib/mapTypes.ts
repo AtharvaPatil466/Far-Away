@@ -100,6 +100,161 @@ export const DEFAULT_SHAP: AgentDecisionShap = {
   ],
 }
 
+// ── Shelter database ──────────────────────────────────────────────────────────
+export interface Shelter {
+  id: string
+  name: string
+  district: string
+  lat: number
+  lon: number
+  capacity: number
+  occupied: number
+  status: 'OPEN' | 'FULL' | 'CLOSED'
+  facilities: string[]   // e.g. ['medical', 'food', 'water']
+}
+
+// ── IMD Alert zone ────────────────────────────────────────────────────────────
+export interface IMDAlert {
+  id: string
+  type: 'CYCLONE' | 'FLOOD' | 'STORM_SURGE' | 'HEAVY_RAIN'
+  severity: 'RED' | 'ORANGE' | 'YELLOW'
+  district: string
+  lat: number
+  lon: number
+  radiusKm: number
+  headline: string
+  issuedAt: string   // ISO timestamp
+  validUntil: string
+}
+
+// ── Static Odisha shelter data (IDRN-style) ───────────────────────────────────
+// Replace with: fetch('https://far-away-production.up.railway.app/api/shelters')
+// when Group A confirms the endpoint
+export const ODISHA_SHELTERS: Shelter[] = [
+  {
+    id: 'SH-001',
+    name: 'Paradip Cyclone Shelter',
+    district: 'Jagatsinghpur',
+    lat: 20.316, lon: 86.611,
+    capacity: 2500, occupied: 2180,
+    status: 'OPEN',
+    facilities: ['medical', 'food', 'water', 'power'],
+  },
+  {
+    id: 'SH-002',
+    name: 'Kendrapara Multipurpose Shelter',
+    district: 'Kendrapara',
+    lat: 20.501, lon: 86.421,
+    capacity: 1800, occupied: 1800,
+    status: 'FULL',
+    facilities: ['food', 'water'],
+  },
+  {
+    id: 'SH-003',
+    name: 'Ersama Block Shelter',
+    district: 'Jagatsinghpur',
+    lat: 20.196, lon: 86.372,
+    capacity: 1200, occupied: 640,
+    status: 'OPEN',
+    facilities: ['medical', 'food', 'water'],
+  },
+  {
+    id: 'SH-004',
+    name: 'Mahakalapara Coastal Shelter',
+    district: 'Kendrapara',
+    lat: 20.393, lon: 86.913,
+    capacity: 900, occupied: 720,
+    status: 'OPEN',
+    facilities: ['food', 'water'],
+  },
+  {
+    id: 'SH-005',
+    name: 'Rajnagar Mangrove Shelter',
+    district: 'Kendrapara',
+    lat: 20.447, lon: 86.778,
+    capacity: 600, occupied: 0,
+    status: 'CLOSED',
+    facilities: ['water'],
+  },
+  {
+    id: 'SH-006',
+    name: 'Astarang Panchayat Shelter',
+    district: 'Puri',
+    lat: 19.937, lon: 86.148,
+    capacity: 1500, occupied: 890,
+    status: 'OPEN',
+    facilities: ['medical', 'food', 'water', 'power'],
+  },
+  {
+    id: 'SH-007',
+    name: 'Pentha Coastal Shelter',
+    district: 'Jagatsinghpur',
+    lat: 20.142, lon: 86.703,
+    capacity: 800, occupied: 560,
+    status: 'OPEN',
+    facilities: ['food', 'water'],
+  },
+  {
+    id: 'SH-008',
+    name: 'Bhubaneswar Relief Camp A',
+    district: 'Khordha',
+    lat: 20.296, lon: 85.824,
+    capacity: 3000, occupied: 1200,
+    status: 'OPEN',
+    facilities: ['medical', 'food', 'water', 'power', 'comms'],
+  },
+]
+
+// ── Static IMD alert zones ────────────────────────────────────────────────────
+// Replace with: fetch('https://far-away-production.up.railway.app/api/alerts/imd')
+// when Group A confirms the endpoint
+export const IMD_ALERTS: IMDAlert[] = [
+  {
+    id: 'IMD-001',
+    type: 'CYCLONE',
+    severity: 'RED',
+    district: 'Jagatsinghpur',
+    lat: 20.27, lon: 86.55,
+    radiusKm: 45,
+    headline: 'Cyclone Remal — Landfall imminent, T-6h. Winds 165 kmph.',
+    issuedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    validUntil: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'IMD-002',
+    type: 'STORM_SURGE',
+    severity: 'RED',
+    district: 'Kendrapara',
+    lat: 20.50, lon: 86.72,
+    radiusKm: 30,
+    headline: 'Storm surge warning — 2.1m above normal tide. Evacuate coastal belt immediately.',
+    issuedAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    validUntil: new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'IMD-003',
+    type: 'FLOOD',
+    severity: 'ORANGE',
+    district: 'Cuttack',
+    lat: 20.462, lon: 85.883,
+    radiusKm: 25,
+    headline: 'Mahanadi in spate — gauge at 91.2%. Flash flood risk HIGH.',
+    issuedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    validUntil: new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'IMD-004',
+    type: 'HEAVY_RAIN',
+    severity: 'YELLOW',
+    district: 'Puri',
+    lat: 19.81, lon: 85.83,
+    radiusKm: 20,
+    headline: 'Extremely heavy rainfall expected — 187mm/24h. Low-lying areas at risk.',
+    issuedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    validUntil: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  },
+]
+
 // Synthetic fallback data — Odisha coast (Puri / Balasore / Cuttack)
 export const SYNTHETIC_MAP_STATE: MapState = {
   teams: {
