@@ -233,46 +233,34 @@ class PostgisResourceRepo:
 
     # ---------------------------------------------------- PostGIS impls (lazy) --
     # These run only against a live server and are excluded from the offline
-    # test path; the SQL mirrors the in-memory semantics above.
+    # test path. The SQL is now sourced from the single canonical builder module
+    # :mod:`disastermind.integrations.sql` (imported lazily, no import-time/network
+    # dependency) so DDL and statements live in exactly one place; semantics still
+    # mirror the in-memory fallback above.
+    @staticmethod
+    def _sql():  # pragma: no cover - imported only on the live backend path
+        from ..integrations import sql as _sql
+
+        return _sql
+
     def _upsert_asset_pg(self, a: Asset) -> Asset:  # pragma: no cover
+        stmt, params = self._sql().upsert_asset_sql(a)
         with self._conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO dm_assets
-                    (asset_id, type, lat, lon, capacity, available, fuel_pct, geom)
-                VALUES
-                    (%s, %s, %s, %s, %s, %s, %s,
-                     ST_SetSRID(ST_MakePoint(%s, %s), 4326))
-                ON CONFLICT (asset_id) DO UPDATE SET
-                    type=EXCLUDED.type, lat=EXCLUDED.lat, lon=EXCLUDED.lon,
-                    capacity=EXCLUDED.capacity, available=EXCLUDED.available,
-                    fuel_pct=EXCLUDED.fuel_pct, geom=EXCLUDED.geom
-                """,
-                (
-                    a.asset_id, a.type.value, a.location.lat, a.location.lon,
-                    a.capacity, a.available, a.fuel_pct,
-                    a.location.lon, a.location.lat,
-                ),
-            )
+            cur.execute(stmt, params)
             self._conn.commit()
         return a
 
     def _get_asset_pg(self, asset_id: str) -> Asset | None:  # pragma: no cover
+        stmt, params = self._sql().get_asset_sql(asset_id)
         with self._conn.cursor() as cur:
-            cur.execute(
-                "SELECT asset_id, type, lat, lon, capacity, available, fuel_pct "
-                "FROM dm_assets WHERE asset_id=%s",
-                (asset_id,),
-            )
+            cur.execute(stmt, params)
             row = cur.fetchone()
         return self._row_to_asset(row) if row else None
 
     def _all_assets_pg(self) -> list[Asset]:  # pragma: no cover
+        stmt, params = self._sql().all_assets_sql()
         with self._conn.cursor() as cur:
-            cur.execute(
-                "SELECT asset_id, type, lat, lon, capacity, available, fuel_pct "
-                "FROM dm_assets"
-            )
+            cur.execute(stmt, params)
             rows = cur.fetchall()
         return [self._row_to_asset(r) for r in rows]
 
@@ -288,35 +276,25 @@ class PostgisResourceRepo:
         )
 
     def _upsert_zone_pg(self, z: PopulationCell) -> PopulationCell:  # pragma: no cover
+        stmt, params = self._sql().upsert_zone_sql(z)
         with self._conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO dm_zones (cell_id, lat, lon, population, geom)
-                VALUES (%s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
-                ON CONFLICT (cell_id) DO UPDATE SET
-                    lat=EXCLUDED.lat, lon=EXCLUDED.lon,
-                    population=EXCLUDED.population, geom=EXCLUDED.geom
-                """,
-                (z.cell_id, z.centroid.lat, z.centroid.lon, z.population,
-                 z.centroid.lon, z.centroid.lat),
-            )
+            cur.execute(stmt, params)
             self._conn.commit()
         return z
 
     def _get_zone_pg(self, cell_id: str) -> PopulationCell | None:  # pragma: no cover
+        stmt, params = self._sql().get_zone_sql(cell_id)
         with self._conn.cursor() as cur:
-            cur.execute(
-                "SELECT cell_id, lat, lon, population FROM dm_zones WHERE cell_id=%s",
-                (cell_id,),
-            )
+            cur.execute(stmt, params)
             row = cur.fetchone()
         if not row:
             return None
         return PopulationCell(row[0], LatLon(float(row[1]), float(row[2])), int(row[3]))
 
     def _all_zones_pg(self) -> list[PopulationCell]:  # pragma: no cover
+        stmt, params = self._sql().all_zones_sql()
         with self._conn.cursor() as cur:
-            cur.execute("SELECT cell_id, lat, lon, population FROM dm_zones")
+            cur.execute(stmt, params)
             rows = cur.fetchall()
         return [
             PopulationCell(r[0], LatLon(float(r[1]), float(r[2])), int(r[3])) for r in rows

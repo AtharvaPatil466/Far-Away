@@ -154,20 +154,24 @@ class ElasticsearchAuditRepo:
             self._docs.append(doc)
         return doc
 
+    @staticmethod
+    def _elastic():  # pragma: no cover - imported only on the live backend path
+        from ..integrations import elastic as _elastic
+
+        return _elastic
+
     def _search_pg(self, text, fields, start, end, ts_field, size):  # pragma: no cover
-        must: list[dict] = []
-        if text:
-            must.append({"query_string": {"query": text}})
-        for k, v in (fields or {}).items():
-            must.append({"term": {k: getattr(v, "value", v)}})
-        if start is not None or end is not None:
-            rng: dict[str, Any] = {}
-            if start is not None:
-                rng["gte"] = start
-            if end is not None:
-                rng["lte"] = end
-            must.append({"range": {ts_field: rng}})
-        body = {"query": {"bool": {"must": must}} if must else {"match_all": {}}, "size": size}
+        # Query-DSL construction lives in the single canonical builder module
+        # :mod:`disastermind.integrations.elastic` (imported lazily — no import-time
+        # or network dependency) so the audit search body is defined in one place.
+        body = self._elastic().audit_search_body(
+            text,
+            fields=fields,
+            start=start,
+            end=end,
+            ts_field=ts_field,
+            size=size,
+        )
         try:
             res = self._es.search(index=self.index, body=body)
             return [h["_source"] for h in res["hits"]["hits"]]

@@ -160,48 +160,36 @@ class TimescaleTelemetryRepo:
             self._conn = None
 
     # --------------------------------------------------- Timescale impls (lazy) -
-    def _append_pg(self, p: TelemetryPoint) -> TelemetryPoint:  # pragma: no cover
-        import json
+    # SQL is sourced from the single canonical builder module
+    # :mod:`disastermind.integrations.sql` (imported lazily — no import-time or
+    # network dependency) so statements live in exactly one place; the queries
+    # mirror the in-memory fallback semantics above.
+    @staticmethod
+    def _sql():  # pragma: no cover - imported only on the live backend path
+        from ..integrations import sql as _sql
 
+        return _sql
+
+    def _append_pg(self, p: TelemetryPoint) -> TelemetryPoint:  # pragma: no cover
+        stmt, params = self._sql().insert_telemetry_sql(p)
         with self._conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO dm_telemetry (sensor_id, metric, value, ts, meta) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (p.sensor_id, p.metric, p.value, p.ts, json.dumps(p.meta)),
-            )
+            cur.execute(stmt, params)
             self._conn.commit()
         return p
 
     def _query_range_pg(self, sensor_id, metric, start, end, limit):  # pragma: no cover
-        clauses, params = [], []
-        if sensor_id is not None:
-            clauses.append("sensor_id=%s"); params.append(sensor_id)
-        if metric is not None:
-            clauses.append("metric=%s"); params.append(metric)
-        if start is not None:
-            clauses.append("ts >= %s"); params.append(start)
-        if end is not None:
-            clauses.append("ts <= %s"); params.append(end)
-        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
-        sql = f"SELECT sensor_id, metric, value, ts, meta FROM dm_telemetry{where} ORDER BY ts"
-        if limit is not None:
-            sql += " LIMIT %s"; params.append(limit)
+        stmt, params = self._sql().query_telemetry_range_sql(
+            sensor_id, metric, start, end, limit
+        )
         with self._conn.cursor() as cur:
-            cur.execute(sql, params)
+            cur.execute(stmt, params)
             rows = cur.fetchall()
         return [self._row(r) for r in rows]
 
     def _latest_pg(self, sensor_id, metric):  # pragma: no cover
-        clauses, params = ["sensor_id=%s"], [sensor_id]
-        if metric is not None:
-            clauses.append("metric=%s"); params.append(metric)
-        sql = (
-            "SELECT sensor_id, metric, value, ts, meta FROM dm_telemetry WHERE "
-            + " AND ".join(clauses)
-            + " ORDER BY ts DESC LIMIT 1"
-        )
+        stmt, params = self._sql().latest_telemetry_sql(sensor_id, metric)
         with self._conn.cursor() as cur:
-            cur.execute(sql, params)
+            cur.execute(stmt, params)
             row = cur.fetchone()
         return self._row(row) if row else None
 
