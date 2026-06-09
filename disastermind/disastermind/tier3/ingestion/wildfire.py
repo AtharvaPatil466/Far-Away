@@ -150,27 +150,44 @@ class FIRMSFeedAgent(BaseFeedAgent):
         ]
 
     # ----------------------------------------------------------------- fetch
-    def fetch(self) -> list[dict[str, Any]]:  # pragma: no cover - network path
-        """Live GET of the NASA FIRMS area API (lazy ``httpx``).
+    #: NASA FIRMS area-API base (key-gated source — PRD Step 2).
+    DEFAULT_BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area"
 
-        FIRMS returns CSV; we request the JSON-ish area endpoint and coerce to
-        a list of row dicts. Any failure degrades to :meth:`sample` (PRD Step 10).
+    @staticmethod
+    def parse_csv(text: str) -> list[dict[str, Any]]:
+        """Coerce a FIRMS area-API CSV body into a list of row dicts (stdlib).
+
+        Pure and testable against the committed ``firms_viirs.csv`` fixture so
+        the live CSV shape is validated without any network call.
         """
-        base = getattr(self.settings, "firms_base_url", None) or (
-            "https://firms.modaps.eosdis.nasa.gov/api/area"
+        import csv as _csv
+        import io as _io
+
+        reader = _csv.DictReader(_io.StringIO(text))
+        return [dict(row) for row in reader]
+
+    def fetch(self, transport: Any = None) -> list[dict[str, Any]]:
+        """Live GET of the NASA FIRMS area API — key-gated (PRD Step 2).
+
+        FIRMS requires a MAP_KEY (``settings.firms_api_key``). Without it the
+        adapter never touches the network and degrades to :meth:`sample` so the
+        edge node stays offline-safe. FIRMS returns CSV, decoded by
+        :meth:`parse_csv`. ``transport`` is injected only by tests; production
+        passes ``None``. Any failure degrades to :meth:`sample` (PRD Step 10).
+        """
+        from .http import http_get_text
+
+        key = getattr(self.settings, "firms_api_key", None) or getattr(
+            self.settings, "firms_map_key", None
         )
-        key = getattr(self.settings, "firms_map_key", None) or ""
+        if not key:
+            log.info("FIRMS has no MAP_KEY configured; using sample()")
+            return self.sample()
+        base = getattr(self.settings, "firms_base_url", None) or self.DEFAULT_BASE_URL
         url = f"{base}/csv/{key}/VIIRS_NOAA20_NRT/world/1"
         try:
-            import csv as _csv
-            import io as _io
-
-            import httpx  # type: ignore
-
-            resp = httpx.get(url, timeout=15.0)
-            resp.raise_for_status()
-            reader = _csv.DictReader(_io.StringIO(resp.text))
-            rows = [dict(row) for row in reader]
+            text = http_get_text(url, timeout=15.0, transport=transport)
+            rows = self.parse_csv(text)
             return rows or self.sample()
         except Exception:
             log.exception("FIRMS fetch failed; using sample()")
@@ -291,20 +308,27 @@ class OpenWeatherMapFeedAgent(BaseFeedAgent):
         ]
 
     # ----------------------------------------------------------------- fetch
-    def fetch(self) -> list[dict[str, Any]]:  # pragma: no cover - network path
-        """Live GET of OpenWeatherMap current weather (lazy ``httpx``)."""
+    def fetch(self, transport: Any = None) -> list[dict[str, Any]]:
+        """Live GET of OpenWeatherMap current weather — key-gated (PRD Step 2).
+
+        OWM requires an ``appid``; without one the adapter stays offline and
+        degrades to :meth:`sample`. Uses the shared HTTP transport (lazy
+        ``httpx`` with stdlib ``urllib`` fallback). ``transport`` is injected
+        only by tests; production passes ``None``.
+        """
+        from .http import http_get_json
+
+        key = getattr(self.settings, "owm_api_key", None) or ""
+        if not key:
+            log.info("OpenWeatherMap has no API key configured; using sample()")
+            return self.sample()
         base = getattr(self.settings, "owm_base_url", None) or (
             "https://api.openweathermap.org/data/2.5/weather"
         )
-        key = getattr(self.settings, "owm_api_key", None) or ""
         # Default to the Module-C demo AOI (Delhi) when no coords configured.
         url = f"{base}?lat=28.6139&lon=77.2090&units=metric&appid={key}"
         try:
-            import httpx  # type: ignore
-
-            resp = httpx.get(url, timeout=10.0)
-            resp.raise_for_status()
-            data = resp.json()
+            data = http_get_json(url, timeout=10.0, transport=transport)
             return data if isinstance(data, list) else [data]
         except Exception:
             log.exception("OpenWeatherMap fetch failed; using sample()")

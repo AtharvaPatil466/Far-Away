@@ -124,17 +124,24 @@ class USGSFeedAgent(BaseFeedAgent):
         }
 
     # ----------------------------------------------------------------- fetch
-    def fetch(self) -> dict[str, Any]:  # pragma: no cover - network path
-        """Live GET of the USGS GeoJSON summary feed (lazy ``httpx``)."""
-        url = getattr(self.settings, "usgs_feed_url", None) or (
-            "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-        )
-        try:
-            import httpx  # type: ignore
+    #: Default USGS all_hour summary feed (free, no API key — PRD Step 2).
+    DEFAULT_URL = (
+        "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
+    )
 
-            resp = httpx.get(url, timeout=10.0)
-            resp.raise_for_status()
-            return resp.json()
+    def fetch(self, transport: Any = None) -> dict[str, Any]:
+        """Live GET of the USGS all_hour GeoJSON feed (free, no key).
+
+        Uses the shared HTTP transport (lazy ``httpx`` with a stdlib
+        ``urllib.request`` fallback — no hard dependency). ``transport`` is
+        injected only by tests with a recorded fixture; production passes
+        ``None``. Any failure degrades to :meth:`sample` (PRD Step 10).
+        """
+        from .http import http_get_json
+
+        url = getattr(self.settings, "usgs_feed_url", None) or self.DEFAULT_URL
+        try:
+            return http_get_json(url, timeout=10.0, transport=transport)
         except Exception:
             log.exception("USGS fetch failed; using sample()")
             return self.sample()
@@ -254,13 +261,23 @@ class NCSFeedAgent(BaseFeedAgent):
         ]
 
     # ----------------------------------------------------------------- fetch
-    def fetch(self) -> list[dict[str, Any]]:  # pragma: no cover - network path
-        """Live GET + ``feedparser`` parse of the NCS RSS feed (lazy import)."""
+    def fetch(self, transport: Any = None) -> list[dict[str, Any]]:  # pragma: no cover - network path
+        """Live GET + ``feedparser`` parse of the NCS RSS feed.
+
+        The RSS body is fetched through the shared HTTP transport seam so the
+        injected/recorded ``transport`` is honoured (tests stay offline and the
+        live-resilient circuit breaker observes real upstream failures);
+        ``feedparser`` then parses the in-memory text. Any failure degrades to
+        ``sample()``.
+        """
+        from .http import http_get_text
+
         url = "https://riseq.seismo.gov.in/riseq/earthquake/rss"
         try:
+            text = http_get_text(url, timeout=10.0, transport=transport)
             import feedparser  # type: ignore
 
-            parsed = feedparser.parse(url)
+            parsed = feedparser.parse(text)
             items: list[dict[str, Any]] = []
             for e in getattr(parsed, "entries", []) or []:
                 items.append(

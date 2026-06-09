@@ -1,0 +1,122 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "generated": 1733601000000,
+    "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson",
+    "title": "USGS All Earthquakes, Past Hour",
+    "status": 200,
+    "api": "1.10.3",
+    "count": 3
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "mag": 5.3,
+        "place": "54 km SSW of Sand Point, Alaska",
+        "time": 1733600820000,
+        "updated": 1733600990000,
+        "tz": null,
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/ak0248zabcde",
+        "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/ak0248zabcde.geojson",
+        "felt": 4,
+        "cdi": 3.4,
+        "mmi": null,
+        "alert": null,
+        "status": "reviewed",
+        "tsunami": 1,
+        "sig": 432,
+        "net": "ak",
+        "code": "0248zabcde",
+        "ids": ",ak0248zabcde,",
+        "sources": ",ak,",
+        "types": ",origin,phase-data,",
+        "nst": 41,
+        "dmin": 0.512,
+        "rms": 0.71,
+        "gap": 96,
+        "magType": "ml",
+        "type": "earthquake",
+        "title": "M 5.3 - 54 km SSW of Sand Point, Alaska"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-160.8623, 54.9821, 32.6]
+      },
+      "id": "ak0248zabcde"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "mag": 4.7,
+        "place": "112 km E of Kira Kira, Solomon Islands",
+        "time": 1733600400000,
+        "updated": 1733600700000,
+        "tz": null,
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000pqrst",
+        "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000pqrst.geojson",
+        "felt": null,
+        "cdi": null,
+        "mmi": null,
+        "alert": null,
+        "status": "reviewed",
+        "tsunami": 0,
+        "sig": 340,
+        "net": "us",
+        "code": "6000pqrst",
+        "ids": ",us6000pqrst,",
+        "sources": ",us,",
+        "types": ",origin,phase-data,",
+        "nst": 58,
+        "dmin": 2.341,
+        "rms": 0.94,
+        "gap": 71,
+        "magType": "mb",
+        "type": "earthquake",
+        "title": "M 4.7 - 112 km E of Kira Kira, Solomon Islands"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [162.4517, -10.3982, 41.0]
+      },
+      "id": "us6000pqrst"
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "mag": 1.34,
+        "place": "8 km NW of The Geysers, CA",
+        "time": 1733600100000,
+        "updated": 1733600260000,
+        "tz": null,
+        "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc73xyz123",
+        "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/nc73xyz123.geojson",
+        "felt": null,
+        "cdi": null,
+        "mmi": null,
+        "alert": null,
+        "status": "automatic",
+        "tsunami": 0,
+        "sig": 28,
+        "net": "nc",
+        "code": "73xyz123",
+        "ids": ",nc73xyz123,",
+        "sources": ",nc,",
+        "types": ",nearby-cities,origin,phase-data,",
+        "nst": 19,
+        "dmin": 0.008,
+        "rms": 0.02,
+        "gap": 64,
+        "magType": "md",
+        "type": "earthquake",
+        "title": "M 1.3 - 8 km NW of The Geysers, CA"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-122.7891, 38.8123, 2.4]
+      },
+      "id": "nc73xyz123"
+    }
+  ],
+  "bbox": [-160.8623, -10.3982, 2.4, 162.4517, 54.9821, 41.0]
+}

@@ -128,22 +128,39 @@ class OpenMeteoFeedAgent(BaseFeedAgent):
         }
 
     # ----------------------------------------------------------------- fetch
-    def fetch(self) -> dict[str, Any]:  # pragma: no cover - network path
-        """Live GET of the Open-Meteo forecast API (lazy ``httpx``, no key)."""
-        base = getattr(self.settings, "open_meteo_base_url", None) or (
-            "https://api.open-meteo.com/v1/forecast"
+    #: Default forecast AOI (Odisha coast, Bay of Bengal — Module A demo).
+    DEFAULT_LAT = 19.31
+    DEFAULT_LON = 86.61
+    DEFAULT_BASE_URL = "https://api.open-meteo.com/v1/forecast"
+
+    def build_url(self) -> str:
+        """Construct the Open-Meteo forecast request URL (free, no API key)."""
+        base = (
+            getattr(self.settings, "open_meteo_base_url", None)
+            or getattr(self.settings, "openmeteo_url", None)
+            or self.DEFAULT_BASE_URL
         )
-        url = (
-            f"{base}?latitude=19.31&longitude=86.61"
+        lat = getattr(self.settings, "open_meteo_lat", None) or self.DEFAULT_LAT
+        lon = getattr(self.settings, "open_meteo_lon", None) or self.DEFAULT_LON
+        return (
+            f"{base}?latitude={lat}&longitude={lon}"
             "&hourly=precipitation,wind_speed_10m,wind_gusts_10m,precipitation_probability"
             "&forecast_days=1"
         )
-        try:
-            import httpx  # type: ignore
 
-            resp = httpx.get(url, timeout=10.0)
-            resp.raise_for_status()
-            return resp.json()
+    def fetch(self, transport: Any = None) -> dict[str, Any]:
+        """Live GET of the Open-Meteo forecast API (free, no key).
+
+        Uses the shared HTTP transport (lazy ``httpx`` with a stdlib
+        ``urllib.request`` fallback — no hard dependency). ``transport`` is
+        injected only by tests with a recorded fixture; production passes
+        ``None``. Any failure degrades to :meth:`sample` (PRD Step 10).
+        """
+        from .http import http_get_json
+
+        url = self.build_url()
+        try:
+            return http_get_json(url, timeout=10.0, transport=transport)
         except Exception:
             log.exception("Open-Meteo fetch failed; using sample()")
             return self.sample()

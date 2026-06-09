@@ -102,13 +102,46 @@ class BaseFeedAgent(BaseAgent):
         """
         raise NotImplementedError
 
-    def fetch(self) -> Any:  # pragma: no cover - never called in tests
-        """Perform the real network GET. Lazily imports ``httpx``/``feedparser``.
+    def fetch(self, transport: Any = None) -> Any:  # pragma: no cover - network path
+        """Perform the real network GET. Lazily imports ``httpx`` (urllib fallback).
 
-        Falls back to :meth:`sample` on any failure so a flaky feed degrades
-        gracefully rather than crashing the edge node (PRD Step 10).
+        ``transport`` is an injectable ``(url, timeout) -> (status, text)`` seam
+        used **only by tests** with a recorded fixture; production passes
+        ``None`` so the real network transport is used. Falls back to
+        :meth:`sample` on any failure so a flaky feed degrades gracefully rather
+        than crashing the edge node (PRD Step 10).
         """
         return self.sample()
+
+    # ------------------------------------------------------------- poll_once
+    def poll_once(self, live: bool = False, transport: Any = None) -> list[dict[str, Any]]:
+        """Acquire and normalise one batch of observations (PRD Step 2).
+
+        The explicit seam between offline and live ingestion:
+
+          * ``live=False`` (the DEFAULT, and what :meth:`tick` uses in degraded
+            mode) returns ``parse(sample())`` — fully offline, deterministic, no
+            network. This is the path the test-suite exercises.
+          * ``live=True`` performs the real GET via :meth:`fetch` and parses the
+            response: ``parse(fetch(transport))``. ``transport`` is injected only
+            by tests (a recorded-fixture stub); production leaves it ``None`` so
+            the real network transport is used.
+
+        Any live failure degrades to the offline ``sample()`` so a flaky or
+        unreachable feed never crashes the edge node (PRD Step 10).
+        """
+        if not live:
+            return self.parse(self.sample())
+        try:  # pragma: no cover - network path excluded from tests
+            raw = self.fetch(transport=transport)
+        except Exception:  # pragma: no cover
+            log.exception("%s live poll failed; degrading to sample()", self.name)
+            raw = self.sample()
+        try:
+            return self.parse(raw)
+        except Exception:
+            log.exception("%s failed to parse live batch; returning empty", self.name)
+            return []
 
     def assess(self, observations: list[dict[str, Any]]) -> tuple[bool, Priority, list[str]]:
         """Decide whether an activation threshold (PRD Step 1) is breached.
@@ -130,16 +163,21 @@ class BaseFeedAgent(BaseAgent):
 
     # ------------------------------------------------------------------ tick
     def tick(self) -> list[Message]:
-        """Periodic poll → normalise → emit one RAW_FEED message (PRD Step 2/10)."""
+        """Periodic poll → normalise → emit one RAW_FEED message (PRD Step 2/10).
+
+        Uses the :meth:`poll_once` seam with this agent's ``live`` flag, so the
+        offline/live split is identical to a direct ``poll_once`` call. In the
+        default degraded mode (``live=False``) this is ``parse(sample())`` — no
+        network, fully deterministic.
+        """
         self._tick_count += 1
         if self.poll_every_ticks > 1 and (self._tick_count % self.poll_every_ticks) != 0:
             return []
 
-        raw = self._pull()
         try:
-            observations = self.parse(raw)
+            observations = self.poll_once(live=self.live)
         except Exception:
-            log.exception("%s failed to parse batch", self.name)
+            log.exception("%s failed to acquire/parse batch", self.name)
             return []
         if not observations:
             return []

@@ -117,15 +117,13 @@ class CWCFeedAgent(BaseFeedAgent):
         ]
 
     # ----------------------------------------------------------------- fetch
-    def fetch(self) -> list[dict[str, Any]]:  # pragma: no cover - network path
-        """Live GET of the India-WRIS gauge API (lazy ``httpx``)."""
+    def fetch(self, transport: Any = None) -> list[dict[str, Any]]:  # pragma: no cover - network path
+        """Live GET of the India-WRIS gauge API via the shared HTTP transport."""
+        from .http import http_get_json
+
         url = "https://indiawris.gov.in/wris/api/RiverMonitoring/getRiverStations"
         try:
-            import httpx  # type: ignore
-
-            resp = httpx.get(url, timeout=10.0)
-            resp.raise_for_status()
-            data = resp.json()
+            data = http_get_json(url, timeout=10.0, transport=transport)
             return data if isinstance(data, list) else data.get("stations", [])
         except Exception:
             log.exception("CWC-WRIS fetch failed; using sample()")
@@ -234,16 +232,14 @@ class IMDFeedAgent(BaseFeedAgent):
         ]
 
     # ----------------------------------------------------------------- fetch
-    def fetch(self) -> list[dict[str, Any]]:  # pragma: no cover - network path
-        """Live GET of IMD bulletins (lazy ``httpx``)."""
+    def fetch(self, transport: Any = None) -> list[dict[str, Any]]:  # pragma: no cover - network path
+        """Live GET of IMD bulletins via the shared HTTP transport."""
+        from .http import http_get_json
+
         base = getattr(self.settings, "imd_base_url", None) or "https://mausam.imd.gov.in"
         url = f"{base}/api/cyclone_warning.php"
         try:
-            import httpx  # type: ignore
-
-            resp = httpx.get(url, timeout=10.0)
-            resp.raise_for_status()
-            data = resp.json()
+            data = http_get_json(url, timeout=10.0, transport=transport)
             return data if isinstance(data, list) else data.get("bulletins", [])
         except Exception:
             log.exception("IMD fetch failed; using sample()")
@@ -362,15 +358,18 @@ class BhuvanFeedAgent(BaseFeedAgent):
         ]
 
     # ----------------------------------------------------------------- fetch
-    def fetch(self) -> list[dict[str, Any]]:  # pragma: no cover - network path
-        """Live GET of Bhuvan flood-services WFS/JSON (lazy ``httpx``)."""
+    def fetch(self, transport: Any = None) -> list[dict[str, Any]]:  # pragma: no cover - network path
+        """Live GET of Bhuvan flood-services WFS/JSON via the shared transport.
+
+        Accepts the injectable ``transport`` seam (like the other live adapters)
+        so live polling conforms to the base contract — no signature mismatch —
+        and tests can drive it offline. Any failure degrades to ``sample()``.
+        """
+        from .http import http_get_json
+
         url = "https://bhuvan-app1.nrsc.gov.in/api/flood/inundation.json"
         try:
-            import httpx  # type: ignore
-
-            resp = httpx.get(url, timeout=15.0)
-            resp.raise_for_status()
-            data = resp.json()
+            data = http_get_json(url, timeout=15.0, transport=transport)
             return data if isinstance(data, list) else data.get("inundation", [])
         except Exception:
             log.exception("Bhuvan fetch failed; using sample()")
