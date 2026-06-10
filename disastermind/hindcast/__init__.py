@@ -18,6 +18,7 @@ despite a Category-4 landfall.
 from __future__ import annotations
 
 from .fani import load_fani
+from .ibtracs import backtest_all, load_ibtracs_cases, score_storm
 from .pipeline_backtest import backtest_event, run_backtest
 from .replay import HindcastResult, extrapolate_landfall, run_hindcast
 from .report import to_markdown
@@ -30,4 +31,7 @@ __all__ = [
     "to_markdown",
     "run_backtest",
     "backtest_event",
+    "load_ibtracs_cases",
+    "score_storm",
+    "backtest_all",
 ]

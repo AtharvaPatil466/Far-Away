@@ -26,10 +26,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--backtest", action="store_true",
                     help="run the FULL-PIPELINE backtest across all real cyclones "
                          "(forecast -> evacuation decision -> scored vs reality)")
+    ap.add_argument("--ibtracs", action="store_true",
+                    help="run the BULK IBTrACS backtest across ~90 named landfalling "
+                         "NI cyclones (activation lead + track-extrapolation error)")
     ap.add_argument("--lead", type=int, default=72,
                     help="forecast cutoff in hours before landfall (backtest; default 72)")
     ap.add_argument("--json", action="store_true", help="emit raw results as JSON")
     args = ap.parse_args(argv)
+
+    if args.ibtracs:
+        from .ibtracs import backtest_all
+        from .ibtracs import to_markdown as ibtracs_md
+
+        report = backtest_all()
+        print(json.dumps(report, indent=2) if args.json else ibtracs_md(report))
+        return 0
 
     if args.backtest:
         from .pipeline_backtest import run_backtest

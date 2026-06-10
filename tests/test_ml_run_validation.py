@@ -72,5 +72,7 @@ def test_run_validation_rejects_unknown_hazard():
         run_validation(["volcano"])
 
 
-def test_all_three_hazards_are_registered():
-    assert set(HAZARDS) == {"earthquake", "flood", "fire"}
+def test_core_hazards_are_registered():
+    # the three core hazards plus the India fire re-validation
+    assert {"earthquake", "flood", "fire"} <= set(HAZARDS)
+    assert "fire-india" in HAZARDS

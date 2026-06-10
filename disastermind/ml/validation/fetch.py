@@ -47,6 +47,7 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 FLOOD_FIXTURE = os.path.join(FIXTURES, "openmeteo_glofas_india_2010_2023.json")
 FIRE_FIXTURE = os.path.join(FIXTURES, "fpafod_era5_fire_2012_2018.json")
+FIRE_INDIA_FIXTURE = os.path.join(FIXTURES, "firms_era5_fire_india_2019_2023.json")
 QUAKE_FIXTURE = os.path.join(FIXTURES, "usgs_catalog_2013_2017.json")
 #: Survey-grade external outcome catalog (GDACS UN/EC declared disaster events).
 GDACS_FIXTURE = os.path.join(FIXTURES, "gdacs_india_disasters_2010_2023.json")
@@ -462,10 +463,136 @@ def fetch_gdacs(out_path: str = GDACS_FIXTURE) -> dict:
     return fixture
 
 
+# --------------------------------------------------------------- fire (INDIA, FIRMS)
+#: Fire window for India (VIIRS-SNPP coverage is solid 2012+; use a 5-year span
+#: with a clean temporal split: train 2019-2021, test 2022-2023).
+FIRE_IN_START, FIRE_IN_END = "2019-01-01", "2023-12-31"
+_FIRMS_VIIRS = "https://firms.modaps.eosdis.nasa.gov/data/country/viirs-snpp/{year}/viirs-snpp_{year}_India.csv"
+
+#: 10 real fire-prone Indian cells across the dry-deciduous forest belt + the
+#: Himalayan foothills — India's fire season is Feb-May (not the US summer), and
+#: these regions dominate FSI's annual fire alerts. Regions tag cells into blocks
+#: for leave-one-region-out CV.
+FIRE_CELLS_INDIA: tuple[FireCell, ...] = (
+    FireCell("kanha-mp", "MP", "central", 22.30, 80.60),
+    FireCell("bastar-cg", "CG", "central", 19.10, 82.00),
+    FireCell("simlipal-od", "OD", "east", 21.60, 86.30),
+    FireCell("saranda-jh", "JH", "east", 22.10, 85.40),
+    FireCell("vidarbha-mh", "MH", "central", 20.70, 79.50),
+    FireCell("eastern-ghats-ap", "AP", "south", 18.00, 82.50),
+    FireCell("nilgiris-tn", "TN", "south", 11.50, 76.70),
+    FireCell("uttarakhand", "UK", "himalaya", 30.00, 79.00),
+    FireCell("himachal", "HP", "himalaya", 31.50, 77.30),
+    FireCell("mizoram-ne", "MZ", "northeast", 23.40, 92.80),
+)
+
+
+def _get_text(url: str, *, retries: int = 4) -> str:
+    """GET ``url`` as text (FIRMS CSV), with linear-backoff retries."""
+    last: Exception | None = None
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(url, timeout=180, context=_ssl_context()) as resp:
+                return resp.read().decode("utf-8", errors="replace")
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            time.sleep(2.0 * (attempt + 1))
+    raise RuntimeError(f"GET failed after {retries} attempts: {url}") from last
+
+
+def fetch_fire_india(out_path: str = FIRE_INDIA_FIXTURE) -> dict:
+    """Build a REAL India fire fixture: NASA FIRMS (VIIRS-SNPP) detections + ERA5.
+
+    Replaces the Pacific-NW FPA-FOD validation with genuine Indian geography and
+    fire season. FIRMS gives lat/lon/date/confidence/FRP per detection (no fire
+    'size' — FRP, fire radiative power, is the intensity proxy). One record per
+    :data:`FIRE_CELLS_INDIA` cell: ERA5 daily fire weather + the real detections
+    (nominal/high confidence) that fell inside the cell box.
+    """
+    import csv as _csv
+    import io as _io
+
+    # download all VIIRS-India detections for the window once, then bin per cell
+    all_det: list[dict] = []
+    for year in range(int(FIRE_IN_START[:4]), int(FIRE_IN_END[:4]) + 1):
+        text = _get_text(_FIRMS_VIIRS.format(year=year))
+        rdr = _csv.DictReader(_io.StringIO(text))
+        kept = 0
+        for row in rdr:
+            conf = (row.get("confidence") or "").strip().lower()
+            if conf == "l":  # drop low-confidence detections
+                continue
+            try:
+                all_det.append(
+                    {
+                        "lat": float(row["latitude"]),
+                        "lon": float(row["longitude"]),
+                        "date": row["acq_date"],
+                        "frp": float(row.get("frp") or 0.0),
+                    }
+                )
+                kept += 1
+            except (KeyError, ValueError):
+                continue
+        print(f"fire-india: VIIRS {year}: +{kept} detections ({len(all_det)} total)", file=sys.stderr)
+
+    cells = []
+    for cell in FIRE_CELLS_INDIA:
+        weather = _get_json(
+            _ARCHIVE_API,
+            {
+                "latitude": cell.lat,
+                "longitude": cell.lon,
+                "daily": (
+                    "temperature_2m_max,temperature_2m_min,precipitation_sum,"
+                    "wind_speed_10m_max,relative_humidity_2m_min"
+                ),
+                "start_date": FIRE_IN_START,
+                "end_date": FIRE_IN_END,
+                "timezone": "UTC",
+            },
+        )
+        daily = weather["daily"]
+        fires = [
+            {"date": d["date"], "frp": round(d["frp"], 1)}
+            for d in all_det
+            if abs(d["lat"] - cell.lat) <= cell.half_deg
+            and abs(d["lon"] - cell.lon) <= cell.half_deg
+        ]
+        cells.append(
+            {
+                **asdict(cell),
+                "start": daily["time"][0],
+                "tmax": _round_list(daily["temperature_2m_max"], 1),
+                "tmin": _round_list(daily["temperature_2m_min"], 1),
+                "precip": _round_list(daily["precipitation_sum"], 1),
+                "wind_max": _round_list(daily["wind_speed_10m_max"], 1),
+                "rh_min": _round_list(daily["relative_humidity_2m_min"], 0),
+                "fires": fires,
+            }
+        )
+        print(f"fire-india: {cell.name}: {len(fires)} real detections", file=sys.stderr)
+
+    fixture = {
+        "source": {
+            "fires": "NASA FIRMS VIIRS-SNPP active-fire detections, India country "
+            "archive (nominal/high confidence). FRP = fire radiative power (intensity).",
+            "weather": "ERA5 daily fire weather (Open-Meteo historical archive)",
+            "window": [FIRE_IN_START, FIRE_IN_END],
+            "license": "open data, free APIs, no key",
+        },
+        "cells": cells,
+    }
+    with open(out_path, "w", encoding="utf-8") as fh:
+        json.dump(fixture, fh, separators=(",", ":"))
+    return fixture
+
+
 def main(argv: list[str] | None = None) -> int:
     targets = {
         "flood": fetch_flood,
         "fire": fetch_fire,
+        "fire-india": fetch_fire_india,
         "quake": fetch_quake,
         "gdacs": fetch_gdacs,
     }

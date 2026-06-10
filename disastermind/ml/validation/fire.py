@@ -43,6 +43,17 @@ from dataclasses import dataclass
 FIXTURE = os.path.join(
     os.path.dirname(__file__), "fixtures", "fpafod_era5_fire_2012_2018.json"
 )
+#: India fire fixture (NASA FIRMS VIIRS detections + ERA5), 2019-2023. Same schema
+#: as the PNW fixture; its fire records carry ``frp`` (radiative power) instead of
+#: ``size_acres`` — :func:`load_rows` reads either as the severity payload.
+INDIA_FIXTURE = os.path.join(
+    os.path.dirname(__file__), "fixtures", "firms_era5_fire_india_2019_2023.json"
+)
+#: India fixture is currently a single FIRMS year (2019) — multi-year pending a
+#: reliable FIRMS bulk pull — so it validates via an INTRA-year temporal split:
+#: train on dates before the cutoff, test on strictly later dates (leak-free).
+#: 2019-05-01 puts the Feb-Apr fire ramp in train and the May peak + decline in test.
+INDIA_SPLIT_DATE = _dt.date(2019, 5, 1)
 
 #: Leak-free feature names, in feature order.
 FEATURE_NAMES = (
@@ -125,7 +136,10 @@ def load_rows(path: str = FIXTURE) -> list[FireRow]:
             except (KeyError, ValueError):
                 continue  # fire outside the weather window
             fire_count[day] += 1
-            fire_size[day] = max(fire_size[day], float(f["size_acres"]))
+            # PNW fixture carries acres; the India FIRMS fixture carries FRP —
+            # either is the per-day severity payload.
+            sev = f.get("size_acres", f.get("frp", 0.0))
+            fire_size[day] = max(fire_size[day], float(sev))
 
         for t in range(WARMUP_DAYS, n - MAX_HORIZON):
             window_weather = [tmax[t], rh[t], wind[t]]
@@ -178,11 +192,34 @@ def load_rows(path: str = FIXTURE) -> list[FireRow]:
     return rows
 
 
-def temporal_split(rows: list[FireRow]) -> tuple[list[FireRow], list[FireRow]]:
-    """Train = years < SPLIT_YEAR, test = years >= SPLIT_YEAR. No leakage."""
-    train = [r for r in rows if r.year < SPLIT_YEAR]
-    test = [r for r in rows if r.year >= SPLIT_YEAR]
+def temporal_split(
+    rows: list[FireRow], split_year: int = SPLIT_YEAR
+) -> tuple[list[FireRow], list[FireRow]]:
+    """Train = years < ``split_year``, test = years >= ``split_year``. No leakage.
+
+    ``split_year`` defaults to the PNW window (2017); pass :data:`INDIA_SPLIT_YEAR`
+    (2022) for the India FIRMS fixture.
+    """
+    train = [r for r in rows if r.year < split_year]
+    test = [r for r in rows if r.year >= split_year]
     return train, test
+
+
+def temporal_split_by_date(
+    rows: list[FireRow], cutoff: _dt.date
+) -> tuple[list[FireRow], list[FireRow]]:
+    """Intra-year leak-free split: train = date < ``cutoff``, test = date >= cutoff.
+
+    Used for the single-year India fixture, where a year-based split is impossible.
+    """
+    train = [r for r in rows if r.date < cutoff]
+    test = [r for r in rows if r.date >= cutoff]
+    return train, test
+
+
+def load_rows_india() -> list[FireRow]:
+    """Convenience loader for the committed India FIRMS fire fixture."""
+    return load_rows(INDIA_FIXTURE)
 
 
 def to_xy(rows: list[FireRow]) -> tuple[list[list[float]], list[int]]:

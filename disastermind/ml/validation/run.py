@@ -629,10 +629,65 @@ def fire_spec(path: str | None = None) -> HazardSpec:
     )
 
 
+def india_fire_spec(path: str | None = None) -> HazardSpec:
+    """Fire spec — REAL India fire validation (NASA FIRMS VIIRS detections + ERA5).
+
+    Replaces the Pacific-NW FPA-FOD geography with genuine Indian fire-belt cells
+    and India's Feb-May fire season. Same leak-free methodology; severity is FRP
+    (fire radiative power) instead of acres.
+    """
+    rows = fire_ds.load_rows(path) if path else fire_ds.load_rows_india()
+    train, test = fire_ds.temporal_split_by_date(rows, fire_ds.INDIA_SPLIT_DATE)
+    Xtr, ytr = fire_ds.to_xy(train)
+    Xte, yte = fire_ds.to_xy(test)
+    return HazardSpec(
+        name="fire-india",
+        source="NASA FIRMS (VIIRS-SNPP) active-fire detections + ERA5 fire weather, "
+        "10 Indian fire-belt cells, 2019 daily (real outcomes)",
+        label_desc=">=1 FIRMS active-fire detection in the cell on day t+1",
+        split_desc="intra-year temporal: train Jan-Apr 2019, test May-Dec 2019 "
+        "(single year; multi-year pending a reliable FIRMS bulk pull)",
+        feature_names=fire_ds.FEATURE_NAMES,
+        Xtr=Xtr,
+        ytr=ytr,
+        Xte=Xte,
+        yte=yte,
+        baselines_test={"angstrom_index": [r.angstrom_score for r in test]},
+        fairness_axes_test={
+            "region": [f"region:{r.region}" for r in test],
+            "state": [f"state:{r.state}" for r in test],
+        },
+        fairness_axes_train={
+            "region": [f"region:{r.region}" for r in train],
+            "state": [f"state:{r.state}" for r in train],
+        },
+        severity_test=[{"frp": r.severity} for r in test],
+        slices=[
+            SeveritySlice("FRP >=50 next day", lambda s: s["frp"] >= 50.0),
+            SeveritySlice("FRP >=100 next day", lambda s: s["frp"] >= 100.0),
+        ],
+        X_all=[list(r.features) for r in rows],
+        y_all=[r.label for r in rows],
+        regions_all=[r.region for r in rows],
+        years_all=[r.year for r in rows],
+        horizon_labels_train=[r.horizon_labels for r in train],
+        horizon_labels_test=[r.horizon_labels for r in test],
+        lead_hours=tuple(h * 24 for h in fire_ds.HORIZONS),
+        notes=[
+            "Real Indian geography + Feb-May fire season (replaces the Pacific-NW "
+            "FPA-FOD validation — FIRMS was unreachable when that was first built).",
+            "Label is a FIRMS satellite active-fire detection; severity is FRP "
+            "(fire radiative power), the satellite intensity proxy, not acres.",
+            "The Angström index baseline is the operational fire-weather formula.",
+        ],
+    )
+
+
 HAZARDS: dict[str, Callable[[], HazardSpec]] = {
     "earthquake": quake_spec,
     "flood": flood_spec,
     "fire": fire_spec,
+    "fire-india": india_fire_spec,
 }
 
 
@@ -649,7 +704,16 @@ def run_validation(
     the earthquake section additionally carries the felt-vs-PAGER incumbent
     comparison.
     """
-    chosen = list(hazards) if hazards else list(HAZARDS)
+    if hazards:
+        chosen = list(hazards)
+    else:
+        # Default = core three + India fire only if its fixture is present (the
+        # FIRMS pull is network-dependent; a missing fixture must not break the run).
+        import os as _os
+
+        chosen = ["earthquake", "flood", "fire"]
+        if _os.path.exists(fire_ds.INDIA_FIXTURE):
+            chosen.append("fire-india")
     knobs: dict[str, Any] = (
         {
             "epochs": 80,
