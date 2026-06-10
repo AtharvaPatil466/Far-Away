@@ -63,6 +63,12 @@ SPLIT_YEAR = 2019
 #: Feature warm-up (the 30-day rain accumulation) and label look-ahead horizon.
 WARMUP_DAYS = 30
 HORIZON_DAYS = 3
+#: Lead times (days ahead) for the lead-time-vs-POD curve. Point-in-time labels
+#: ``discharge at day t+h >= flood threshold`` let the eval ask "how many days
+#: of actionable warning do we give?" — a forecast that is accurate only at t+0
+#: cannot drive an evacuation. ``MAX_HORIZON`` bounds the look-ahead window.
+HORIZONS = (1, 2, 3, 5, 7)
+MAX_HORIZON = max(HORIZONS)
 #: Flood / severe-flood thresholds as train-climatology quantiles.
 FLOOD_QUANTILE = 0.95
 SEVERE_QUANTILE = 0.99
@@ -83,10 +89,15 @@ class FloodRow:
     severity: float  # peak horizon discharge / flood threshold (tail payload)
     persistence: float  # operational baseline score: today's q / threshold
     climatology: float  # operational baseline score: train flood freq @ doy
+    horizon_labels: tuple[int, ...]  # per-HORIZONS: discharge at day t+h >= flood_thr
 
     @property
     def year(self) -> int:
         return self.date.year
+
+    def label_at(self, lead_days: int) -> int:
+        """Point-in-time flood label ``lead_days`` ahead (for the lead-time curve)."""
+        return self.horizon_labels[HORIZONS.index(lead_days)]
 
 
 def _quantile(sorted_values: list[float], q: float) -> float:
@@ -156,14 +167,17 @@ def load_rows(path: str = FIXTURE) -> list[FloodRow]:
                 doy_events[doy] = doy_events.get(doy, 0) + 1
         base_rate = sum(doy_events.values()) / max(1, sum(doy_counts.values()))
 
-        # --- per-day rows
-        for t in range(WARMUP_DAYS, n - HORIZON_DAYS):
+        # --- per-day rows. Look-ahead spans MAX_HORIZON so each row carries both
+        # the 1-3 day window label and the per-horizon point-in-time labels.
+        for t in range(WARMUP_DAYS, n - MAX_HORIZON):
             window = discharge[t + 1 : t + 1 + HORIZON_DAYS]
+            horizon_q = [discharge[t + h] for h in HORIZONS]
             feature_precip = precip[t - 29 : t + 1]
             if (
                 discharge[t] is None
                 or discharge[t - 3] is None
                 or any(v is None for v in window)
+                or any(v is None for v in horizon_q)
                 or any(v is None for v in feature_precip)
             ):
                 continue
@@ -203,6 +217,9 @@ def load_rows(path: str = FIXTURE) -> list[FloodRow]:
                     severity=peak / flood_thr,
                     persistence=float(discharge[t]) / flood_thr,
                     climatology=climatology,
+                    horizon_labels=tuple(
+                        1 if float(q) >= flood_thr else 0 for q in horizon_q
+                    ),
                 )
             )
     return rows

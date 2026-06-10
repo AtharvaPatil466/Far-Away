@@ -48,13 +48,17 @@ from ..eval.conformal import (
 from ..eval.crossval import leave_one_region_out, rolling_origin, summarise
 from ..eval.decision import confusion_at, operating_point_for_pod, operating_point_min_cost
 from ..eval.drift import feature_drift, retrain_decision
-from ..eval.fairness import audit_subgroups
+from ..eval.fairness import audit_subgroups, equalized_thresholds, remediate
+from ..eval.leadtime import lead_time_curve
+from ..eval.leadtime import to_dict as leadtime_to_dict
 from ..eval.metrics import (
     brier_score,
     calibration_bins,
     expected_calibration_error,
     roc_auc,
 )
+from ..eval.robustness import degradation_curve
+from ..eval.robustness import to_dict as robustness_to_dict
 from ..eval.significance import compare_auc, compare_brier
 from ..eval.tail import SeveritySlice, tail_report
 from . import fire as fire_ds
@@ -199,6 +203,10 @@ class HazardSpec:
     baselines_test: dict[str, list[float]] = field(default_factory=dict)
     #: Equity axes: axis name -> group key per TEST row.
     fairness_axes_test: dict[str, list[str]] = field(default_factory=dict)
+    #: Same axes per TRAIN row — used to fit per-group remediation thresholds on
+    #: the calibration split (never on test). Optional; remediation is skipped
+    #: for an axis absent here.
+    fairness_axes_train: dict[str, list[str]] = field(default_factory=dict)
     #: Per-test-row severity payload + the slices to stratify on.
     severity_test: list[Any] = field(default_factory=list)
     slices: list[SeveritySlice] = field(default_factory=list)
@@ -207,6 +215,14 @@ class HazardSpec:
     y_all: list[int] = field(default_factory=list)
     regions_all: list[str] = field(default_factory=list)
     years_all: list[int] = field(default_factory=list)
+    #: Per-horizon point-in-time labels for the lead-time curve (empty = N/A,
+    #: e.g. earthquakes, which are instantaneous). Columns align with lead_hours.
+    horizon_labels_train: list[tuple[int, ...]] = field(default_factory=list)
+    horizon_labels_test: list[tuple[int, ...]] = field(default_factory=list)
+    lead_hours: tuple[int, ...] = ()
+    #: Per-test-row dates (date objects) for the GDACS external outcome check;
+    #: set only for the flood hazard (GDACS India flood events are dated).
+    dates_test: list = field(default_factory=list)
     target_pod: float = 0.90
     miss_cost: float = 100.0
     false_alarm_cost: float = 1.0
@@ -287,11 +303,28 @@ def evaluate_hazard(
             ).to_dict()
         comparisons[bname] = entry
 
-    # --- fairness audit at the shared operational threshold
-    fairness = {
-        axis: audit_subgroups(spec.yte, p_te, groups, threshold=threshold)
-        for axis, groups in spec.fairness_axes_test.items()
-    }
+    # --- fairness audit at the shared operational threshold, with the
+    # equalized-odds remediation (per-group thresholds fitted on the CALIBRATION
+    # split, applied on test) when train-side axes are available.
+    cal_order = sorted(cal_idx)
+    fairness = {}
+    for axis, groups in spec.fairness_axes_test.items():
+        audit = audit_subgroups(spec.yte, p_te, groups, threshold=threshold)
+        train_axis = spec.fairness_axes_train.get(axis)
+        if train_axis and audit["under_protected_groups"]:
+            cal_groups = [train_axis[i] for i in cal_order]
+            # Fit per-group thresholds with headroom above the flag bar so the
+            # calibration->test generalisation gap doesn't silently reopen it
+            # (conservative calibration is standard hydrological practice).
+            gthr = equalized_thresholds(
+                y_cal, p_cal, cal_groups,
+                target_pod=min(0.98, spec.target_pod + 0.05), fallback=threshold,
+            )
+            audit["remediation"] = remediate(
+                spec.yte, p_te, groups,
+                threshold=threshold, target_pod=spec.target_pod, group_thresholds=gthr,
+            )
+        fairness[axis] = audit
 
     # --- rare-severe tail
     tail = (
@@ -326,6 +359,52 @@ def evaluate_hazard(
     drifts = feature_drift(spec.feature_names, spec.Xtr, spec.Xte)
     retrain = retrain_decision(drifts, rolling_folds)
 
+    # --- degraded-input robustness (the FIXED model under sensor failure)
+    robustness = robustness_to_dict(
+        degradation_curve(
+            lambda Xq: predict(model, Xq),
+            X_fit,
+            spec.Xte,
+            spec.yte,
+            target_pod=spec.target_pod,
+            seed=seed,
+        )
+    )
+
+    # --- external survey-grade outcome cross-check (GDACS declared floods)
+    external = None
+    if spec.dates_test:
+        import collections
+
+        from . import external as external_mod
+
+        risk_by_date: dict = collections.defaultdict(float)
+        for d, p in zip(spec.dates_test, p_te):
+            risk_by_date[d] = max(risk_by_date[d], p)
+        ext_dates = sorted(risk_by_date)
+        try:
+            external = external_mod.cross_check_flood(
+                ext_dates, [risk_by_date[d] for d in ext_dates], external_mod.load_gdacs()
+            )
+        except (FileNotFoundError, ValueError):
+            external = None  # fixture absent -> skip, never fabricate
+
+    # --- lead-time-vs-POD curve (hazards with a forecast horizon only)
+    leadtime = None
+    if spec.lead_hours and spec.horizon_labels_train and spec.horizon_labels_test:
+        lt_rows = _cap(list(zip(spec.Xtr, spec.horizon_labels_train)), fit_cap)
+        leadtime = leadtime_to_dict(
+            lead_time_curve(
+                [r[0] for r in lt_rows],
+                [r[1] for r in lt_rows],
+                spec.Xte,
+                spec.horizon_labels_test,
+                spec.lead_hours,
+                factory,
+                target_pod=spec.target_pod,
+            )
+        )
+
     return {
         "source": spec.source,
         "label": spec.label_desc,
@@ -348,6 +427,9 @@ def evaluate_hazard(
         "cv_rolling_origin": summarise(rolling_folds),
         "drift": [d.to_dict() for d in drifts],
         "retrain_decision": retrain.to_dict(),
+        "leadtime": leadtime,
+        "robustness": robustness,
+        "external_outcome": external,
         "notes": spec.notes,
     }
 
@@ -385,6 +467,13 @@ def quake_spec(path: str | None = None) -> HazardSpec:
             "magnitude_band": [magband(q) for q in test],
             "depth_band": [
                 "depth:shallow<70km" if q.depth_km < 70 else "depth:deep>=70km" for q in test
+            ],
+        },
+        fairness_axes_train={
+            "region": [q.region() for q in train],
+            "magnitude_band": [magband(q) for q in train],
+            "depth_band": [
+                "depth:shallow<70km" if q.depth_km < 70 else "depth:deep>=70km" for q in train
             ],
         },
         severity_test=[{"mag": q.mag, "mmi": q.mmi} for q in test],
@@ -465,6 +554,11 @@ def flood_spec(path: str | None = None) -> HazardSpec:
             "region": [f"region:{r.region}" for r in test],
             "basin": [f"basin:{r.basin}" for r in test],
         },
+        fairness_axes_train={
+            "setting": [f"setting:{r.setting}" for r in train],
+            "region": [f"region:{r.region}" for r in train],
+            "basin": [f"basin:{r.basin}" for r in train],
+        },
         severity_test=[{"ratio": r.severity, "severe": r.severe} for r in test],
         slices=[
             SeveritySlice("peak >=1.2x flood threshold", lambda s: s["ratio"] >= 1.2),
@@ -474,6 +568,10 @@ def flood_spec(path: str | None = None) -> HazardSpec:
         y_all=[r.label for r in rows],
         regions_all=[r.region for r in rows],
         years_all=[r.year for r in rows],
+        horizon_labels_train=[r.horizon_labels for r in train],
+        horizon_labels_test=[r.horizon_labels for r in test],
+        lead_hours=tuple(h * 24 for h in flood_ds.HORIZONS),
+        dates_test=[r.date for r in test],
         notes=[
             "Flood threshold (q95) and severe threshold (q99) derive from TRAIN "
             "years only — the test period cannot define its own events.",
@@ -506,6 +604,10 @@ def fire_spec(path: str | None = None) -> HazardSpec:
             "region": [f"region:{r.region}" for r in test],
             "state": [f"state:{r.state}" for r in test],
         },
+        fairness_axes_train={
+            "region": [f"region:{r.region}" for r in train],
+            "state": [f"state:{r.state}" for r in train],
+        },
         severity_test=[{"acres": r.severity} for r in test],
         slices=[
             SeveritySlice("fire >=100 acres next day", lambda s: s["acres"] >= 100.0),
@@ -515,6 +617,9 @@ def fire_spec(path: str | None = None) -> HazardSpec:
         y_all=[r.label for r in rows],
         regions_all=[r.region for r in rows],
         years_all=[r.year for r in rows],
+        horizon_labels_train=[r.horizon_labels for r in train],
+        horizon_labels_test=[r.horizon_labels for r in test],
+        lead_hours=tuple(h * 24 for h in fire_ds.HORIZONS),
         notes=[
             "Study region is OR+WA because that is the public FPA-FOD layer's "
             "verified 2012-2018 coverage; provenance is recorded in the fixture.",
@@ -650,6 +755,19 @@ def to_markdown(report: dict[str, Any]) -> str:
                 f"- **{axis}**: {'PASS' if audit['passed'] else 'FLAGGED'} "
                 f"(under-protected: {flag})"
             )
+            rem = audit.get("remediation")
+            if rem:
+                after = rem["after"]
+                cost = ", ".join(
+                    f"{g} +{c:.0%} FAR" for g, c in rem["far_cost_of_equity"].items()
+                )
+                lines.append(
+                    f"  - remediation (per-group thresholds, fit on calibration): "
+                    f"{'PASS' if after['passed'] else 'still flagged: ' + ', '.join(after['under_protected_groups'])}"
+                    + (f" — cost of equity: {cost}" if cost else "")
+                )
+                for g, cause in rem.get("residual_cause", {}).items():
+                    lines.append(f"    - _{g}: {cause}_")
         if h.get("tail"):
             lines += ["", "### Rare-severe tail"]
             for s in h["tail"]["slices"]:
@@ -663,6 +781,49 @@ def to_markdown(report: dict[str, Any]) -> str:
                         f"- {s['slice']}: no events in the test window "
                         "(reported, not hidden)"
                     )
+        if h.get("leadtime"):
+            lt = h["leadtime"]
+            lines += [
+                "",
+                "### Lead time vs POD (actionable warning)",
+                f"- Actionable lead time at POD 80%: "
+                f"**{lt['actionable_lead_hours_at_pod80']} h**",
+                "| Lead (h) | POD | FAR | AUC | events |",
+                "|---|---|---|---|---|",
+            ]
+            for p in lt["curve"]:
+                lines.append(
+                    f"| {p['lead_hours']} | {p['pod']:.2%} | {p['far']:.2%} | "
+                    f"{p['auc']} | {p['events']} |"
+                )
+        if h.get("robustness"):
+            rb = h["robustness"]
+            lines += [
+                "",
+                "### Degraded-input robustness (fixed model, sensors failing)",
+                f"- Graceful until POD 70%: **{rb['graceful_until_pod70']:.0%}** of inputs down",
+                "| Inputs lost | POD | FAR | AUC |",
+                "|---|---|---|---|",
+            ]
+            for p in rb["curve"]:
+                lines.append(
+                    f"| {p['fraction']:.0%} | {p['pod']:.2%} | {p['far']:.2%} | {p['auc']} |"
+                )
+        ext = h.get("external_outcome")
+        if ext and ext.get("auc_vs_declared_events") is not None:
+            g = ext["mean_risk_by_class"]
+            lines += [
+                "",
+                "### External cross-check vs GDACS declared floods (survey-grade)",
+                f"- AUC separating declared-flood days from quiet days: "
+                f"**{ext['auc_vs_declared_events']}** "
+                f"({ext['n_declared_event_rows']}/{ext['n_rows']} declared, label external "
+                "to the model)",
+                f"- Severity gradient (mean risk): Red {g.get('red')} · "
+                f"Orange {g.get('orange')} · quiet {g.get('quiet')}",
+                "- _Country-level GDACS vs basin-specific sites -> temporal national "
+                "check, not per-basin localisation._",
+            ]
         rd = h["retrain_decision"]
         lines += [
             "",

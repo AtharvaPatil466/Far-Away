@@ -1,7 +1,11 @@
 """Fairness subgroup audit + rare-severe tail evaluation."""
 from __future__ import annotations
 
-from disastermind.ml.eval.fairness import audit_subgroups
+from disastermind.ml.eval.fairness import (
+    audit_subgroups,
+    equalized_thresholds,
+    remediate,
+)
 from disastermind.ml.eval.tail import SeveritySlice, tail_report
 
 
@@ -46,6 +50,52 @@ def test_tiny_groups_do_not_noise_flag():
     g += ["tiny", "tiny"]
     audit = audit_subgroups(y, p, g, threshold=0.5, min_n=30)
     assert "tiny" not in audit["under_protected_groups"]
+
+
+def test_group_aware_thresholds_close_a_revealed_gap_at_a_far_cost():
+    """The remediation: a group whose events score lower clears the bar once it
+    gets its own (lower) threshold — and the FAR cost of that is reported."""
+    # group 'a' well-separated; group 'b' events score lower (need lower cutoff)
+    y, p, g = [], [], []
+    for _ in range(80):
+        y += [1, 0]
+        p += [0.9, 0.1]
+        g += ["a", "a"]
+    for _ in range(80):
+        y += [1, 0]
+        p += [0.45, 0.1]  # real events fall below the 0.5 global threshold
+        g += ["b", "b"]
+
+    before = audit_subgroups(y, p, g, threshold=0.5)
+    assert "b" in before["under_protected_groups"]  # gap revealed at global threshold
+
+    gthr = equalized_thresholds(y, p, g, target_pod=0.9, fallback=0.5)
+    assert gthr["b"] < 0.5  # b needs a lower operating point
+    rem = remediate(y, p, g, threshold=0.5, target_pod=0.9, group_thresholds=gthr)
+    assert rem["after"]["passed"]  # gap closed
+    assert rem["far_cost_of_equity"]["b"] >= 0  # the price of equity is stated
+
+
+def test_remediation_classifies_a_discrimination_deficit():
+    """A group the model can't RANK (low AUC) is flagged as needing better inputs,
+    not a threshold — a threshold can't fix weak discrimination."""
+    import random
+
+    rng = random.Random(0)
+    y, p, g = [], [], []
+    for _ in range(200):  # group 'a': strong signal
+        lab = 1 if rng.random() < 0.3 else 0
+        y.append(lab)
+        p.append(0.8 * lab + 0.2 * rng.random())
+        g.append("a")
+    for _ in range(200):  # group 'b': scores are noise vs labels (AUC ~0.5)
+        y.append(1 if rng.random() < 0.3 else 0)
+        p.append(rng.random())
+        g.append("b")
+    gthr = equalized_thresholds(y, p, g, target_pod=0.9, fallback=0.5)
+    rem = remediate(y, p, g, threshold=0.5, target_pod=0.9, group_thresholds=gthr)
+    if "b" in rem["after"]["under_protected_groups"]:
+        assert "discrimination deficit" in rem["residual_cause"]["b"]
 
 
 def test_eventless_group_reports_null_pod_not_a_flag():

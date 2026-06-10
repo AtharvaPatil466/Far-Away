@@ -48,11 +48,15 @@ FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 FLOOD_FIXTURE = os.path.join(FIXTURES, "openmeteo_glofas_india_2010_2023.json")
 FIRE_FIXTURE = os.path.join(FIXTURES, "fpafod_era5_fire_2012_2018.json")
 QUAKE_FIXTURE = os.path.join(FIXTURES, "usgs_catalog_2013_2017.json")
+#: Survey-grade external outcome catalog (GDACS UN/EC declared disaster events).
+GDACS_FIXTURE = os.path.join(FIXTURES, "gdacs_india_disasters_2010_2023.json")
 
 #: Flood study window (GloFAS-ERA5 reanalysis covers 1984+; ERA5 covers 1940+).
 FLOOD_START, FLOOD_END = "2010-01-01", "2023-12-31"
 #: Fire study window (FPA-FOD ends 2018; ERA5 fully covers it).
 FIRE_START, FIRE_END = "2012-01-01", "2018-12-31"
+#: External-outcome window (GDACS declared events to cross-check the models).
+GDACS_START, GDACS_END = "2010-01-01", "2023-12-31"
 
 _FLOOD_API = "https://flood-api.open-meteo.com/v1/flood"
 _ARCHIVE_API = "https://archive-api.open-meteo.com/v1/archive"
@@ -60,6 +64,7 @@ _FPAFOD_API = (
     "https://services3.arcgis.com/T4QMspbfLg3qTGWY/ArcGIS/rest/services/"
     "Historic_Fires_Karen_Short_1992_to_2018/FeatureServer/0/query"
 )
+_GDACS_API = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH"
 
 
 @dataclass(frozen=True)
@@ -397,8 +402,73 @@ def fetch_quake(out_path: str = QUAKE_FIXTURE, start: str = "2013-01-01", end: s
     return rows
 
 
+# ------------------------------------------------------------ survey-grade outcomes
+def fetch_gdacs(out_path: str = GDACS_FIXTURE) -> dict:
+    """Build the survey-grade external-outcome catalog from GDACS (UN/EC).
+
+    GDACS — the UN OCHA / EC-JRC Global Disaster Alert and Coordination System —
+    is the openly-fetchable authoritative substitute used here because EM-DAT and
+    ReliefWeb now gate their bulk data (login / approved-appname). For each real
+    DECLARED Indian flood and tropical-cyclone event in the window we record the
+    GLIDE id, dates, GDACS alert level (Green/Orange/Red — an authoritative
+    severity classification), alert score and severity text (cyclone wind speed).
+    This is an INDEPENDENT outcome track: it is never a model input, only a real
+    yardstick the model's risk is cross-checked against (see validation.external).
+    """
+    events: list[dict] = []
+    for etype in ("FL", "TC"):
+        data = _get_json(
+            _GDACS_API,
+            {
+                "eventtype": etype,
+                "country": "India",
+                "fromdate": GDACS_START,
+                "todate": GDACS_END,
+            },
+        )
+        for feat in data.get("features", []):
+            p = feat.get("properties", {})
+            sev = p.get("severitydata") or {}
+            events.append(
+                {
+                    "eventtype": etype,
+                    "eventid": p.get("eventid"),
+                    "name": p.get("eventname") or p.get("name"),
+                    "glide": p.get("glide") or "",
+                    "fromdate": (p.get("fromdate") or "")[:10],
+                    "todate": (p.get("todate") or "")[:10],
+                    "alertlevel": p.get("alertlevel"),
+                    "alertscore": p.get("alertscore"),
+                    "severity": sev.get("severity"),
+                    "severitytext": sev.get("severitytext"),
+                }
+            )
+        print(f"gdacs: {etype}: {len(events)} cumulative events", file=sys.stderr)
+
+    fixture = {
+        "source": {
+            "name": "GDACS — Global Disaster Alert and Coordination System (UN OCHA / EC-JRC)",
+            "note": "Openly-fetchable authoritative substitute; EM-DAT and "
+            "ReliefWeb gate bulk data (login / approved appname). Alert level is a "
+            "severity classification, not a casualty count — used as an INDEPENDENT "
+            "outcome yardstick, never as a model input.",
+            "window": [GDACS_START, GDACS_END],
+            "url": "https://www.gdacs.org",
+        },
+        "events": events,
+    }
+    with open(out_path, "w", encoding="utf-8") as fh:
+        json.dump(fixture, fh, separators=(",", ":"))
+    return fixture
+
+
 def main(argv: list[str] | None = None) -> int:
-    targets = {"flood": fetch_flood, "fire": fetch_fire, "quake": fetch_quake}
+    targets = {
+        "flood": fetch_flood,
+        "fire": fetch_fire,
+        "quake": fetch_quake,
+        "gdacs": fetch_gdacs,
+    }
     args = (argv if argv is not None else sys.argv[1:]) or list(targets)
     for name in args:
         if name not in targets:

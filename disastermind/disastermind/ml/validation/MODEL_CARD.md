@@ -31,13 +31,25 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 
 ### Fairness audit (shared threshold)
 - **region**: FLAGGED (under-protected: europe-africa)
+  - remediation (per-group thresholds, fit on calibration): PASS — cost of equity: europe-africa +11% FAR
 - **magnitude_band**: FLAGGED (under-protected: mag:4.5-5.5)
+  - remediation (per-group thresholds, fit on calibration): still flagged: mag:4.5-5.5 — cost of equity: mag:4.5-5.5 +2% FAR
+    - _mag:4.5-5.5: discrimination deficit — needs better inputs/features (threshold cannot fix)_
 - **depth_band**: PASS (under-protected: none)
 
 ### Rare-severe tail
 - M6.0+: 90 events, POD 100.00% [100.00%, 100.00%]
 - M6.5+: 46 events, POD 100.00% [100.00%, 100.00%]
 - M7.0+: 17 events, POD 100.00% [100.00%, 100.00%]
+
+### Degraded-input robustness (fixed model, sensors failing)
+- Graceful until POD 70%: **25%** of inputs down
+| Inputs lost | POD | FAR | AUC |
+|---|---|---|---|
+| 0% | 90.26% | 90.04% | 0.9574 |
+| 25% | 75.90% | 88.05% | 0.9338 |
+| 50% | 66.15% | 84.36% | 0.9062 |
+| 75% | 16.92% | 78.71% | 0.6923 |
 
 ### Drift + retraining
 - Retrain now: **False** (no drift signal fired)
@@ -51,15 +63,15 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 - **Source:** GloFAS-ERA5 river-discharge reanalysis + ERA5 precipitation, 12 Indian river-basin sites, 2010-2023 daily (real outcomes)
 - **Label:** discharge reaches the site's train-climatology q95 flood threshold within the next 1-3 days
 - **Split:** temporal: train 2010-2018, test 2019-2023 (five held-out monsoons)
-- **Train:** 39084 rows (base rate 7.09%) · **Test:** 21876 rows (base rate 5.93%)
+- **Train:** 39084 rows (base rate 7.09%) · **Test:** 21828 rows (base rate 5.95%)
 
-**Headline (calibrated, out-of-sample):** AUC 0.9438 · Brier 0.0277 · ECE 0.0037
+**Headline (calibrated, out-of-sample):** AUC 0.9437 · Brier 0.0278 · ECE 0.0037
 
 ### vs operational baselines (paired bootstrap on AUC)
 | Baseline | Baseline AUC | Model AUC | dAUC [95% CI] | p | significant |
 |---|---|---|---|---|---|
-| persistence | 0.9339 | 0.9452 | +0.0112 [+0.0083, +0.0143] | 0.0040 | YES |
-| seasonal_climatology | 0.8553 | 0.9452 | +0.0899 [+0.0821, +0.0975] | 0.0040 | YES |
+| persistence | 0.9338 | 0.9451 | +0.0115 [+0.0088, +0.0146] | 0.0040 | YES |
+| seasonal_climatology | 0.8551 | 0.9451 | +0.0898 [+0.0802, +0.0977] | 0.0040 | YES |
 
 ### At the operating point (threshold chosen on calibration split)
 - Target POD 90% -> threshold 0.063
@@ -67,21 +79,49 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 - Cost model (miss:false-alarm = 100:1): test cost 11662 at the cost-optimal threshold
 
 ### Calibration + conformal coverage
-- ECE raw 0.1757 -> calibrated 0.0037 (isotonic, fit on calibration split)
-- Conformal: target coverage 90%, empirical 91.47%, singleton rate 87.58%
+- ECE raw 0.1760 -> calibrated 0.0037 (isotonic, fit on calibration split)
+- Conformal: target coverage 90%, empirical 91.45%, singleton rate 87.55%
 
 ### Blocked generalisation
-- Leave-one-region-out: worst AUC 0.8849, mean 0.9436 over 5 regions
-- Rolling origin: worst AUC 0.916, mean 0.9438 over 12 years
+- Leave-one-region-out: worst AUC 0.886, mean 0.9441 over 5 regions
+- Rolling origin: worst AUC 0.916, mean 0.9437 over 12 years
 
 ### Fairness audit (shared threshold)
 - **setting**: PASS (under-protected: none)
 - **region**: FLAGGED (under-protected: region:north, region:northeast)
+  - remediation (per-group thresholds, fit on calibration): still flagged: region:northeast — cost of equity: region:north +13% FAR, region:northeast +3% FAR
+    - _region:northeast: residual threshold gap (consider a lower group threshold / more data)_
 - **basin**: FLAGGED (under-protected: basin:brahmaputra, basin:yamuna)
+  - remediation (per-group thresholds, fit on calibration): still flagged: basin:brahmaputra — cost of equity: basin:brahmaputra +5% FAR, basin:yamuna +13% FAR
+    - _basin:brahmaputra: residual threshold gap (consider a lower group threshold / more data)_
 
 ### Rare-severe tail
 - peak >=1.2x flood threshold: 806 events, POD 88.83% [86.48%, 90.82%]
 - severe (train q99): 430 events, POD 90.23% [86.51%, 93.26%]
+
+### Lead time vs POD (actionable warning)
+- Actionable lead time at POD 80%: **168 h**
+| Lead (h) | POD | FAR | AUC | events |
+|---|---|---|---|---|
+| 24 | 89.56% | 39.53% | 0.9809 | 948 |
+| 48 | 88.08% | 74.77% | 0.9553 | 948 |
+| 72 | 88.50% | 81.66% | 0.9372 | 948 |
+| 120 | 89.45% | 84.82% | 0.9192 | 948 |
+| 168 | 89.14% | 86.19% | 0.9043 | 948 |
+
+### Degraded-input robustness (fixed model, sensors failing)
+- Graceful until POD 70%: **25%** of inputs down
+| Inputs lost | POD | FAR | AUC |
+|---|---|---|---|
+| 0% | 90.06% | 76.67% | 0.9451 |
+| 25% | 76.35% | 72.71% | 0.9229 |
+| 50% | 55.86% | 67.75% | 0.8919 |
+| 75% | 17.03% | 60.54% | 0.8026 |
+
+### External cross-check vs GDACS declared floods (survey-grade)
+- AUC separating declared-flood days from quiet days: **0.5653** (436/1819 declared, label external to the model)
+- Severity gradient (mean risk): Red 0.3044 · Orange 0.3374 · quiet 0.2575
+- _Country-level GDACS vs basin-specific sites -> temporal national check, not per-basin localisation._
 
 ### Drift + retraining
 - Retrain now: **False** (no drift signal fired)
@@ -93,27 +133,27 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 - **Source:** USDA FPA-FOD wildfire occurrences + ERA5 fire weather, 12 Pacific-Northwest cells, 2012-2018 daily (real outcomes)
 - **Label:** >=1 agency-reported wildfire discovered in the cell on day t+1
 - **Split:** temporal: train 2012-2016, test 2017-2018 (incl. the record 2017 season)
-- **Train:** 21564 rows (base rate 18.75%) · **Test:** 8748 rows (base rate 19.12%)
+- **Train:** 21564 rows (base rate 18.75%) · **Test:** 8724 rows (base rate 19.18%)
 
-**Headline (calibrated, out-of-sample):** AUC 0.838 · Brier 0.1201 · ECE 0.0226
+**Headline (calibrated, out-of-sample):** AUC 0.8374 · Brier 0.1205 · ECE 0.0227
 
 ### vs operational baselines (paired bootstrap on AUC)
 | Baseline | Baseline AUC | Model AUC | dAUC [95% CI] | p | significant |
 |---|---|---|---|---|---|
-| angstrom_index | 0.8226 | 0.8388 | +0.0160 [+0.0124, +0.0200] | 0.0040 | YES |
+| angstrom_index | 0.8220 | 0.8383 | +0.0162 [+0.0124, +0.0194] | 0.0040 | YES |
 
 ### At the operating point (threshold chosen on calibration split)
 - Target POD 90% -> threshold 0.117
 - On test: POD 89.18%, FAR 63.01%, CSI 0.354, bias 2.41 (tp=1492, fp=2542, fn=181)
-- Cost model (miss:false-alarm = 100:1): test cost 6615 at the cost-optimal threshold
+- Cost model (miss:false-alarm = 100:1): test cost 6609 at the cost-optimal threshold
 
 ### Calibration + conformal coverage
-- ECE raw 0.1987 -> calibrated 0.0226 (isotonic, fit on calibration split)
-- Conformal: target coverage 90%, empirical 89.28%, singleton rate 65.51%
+- ECE raw 0.1991 -> calibrated 0.0227 (isotonic, fit on calibration split)
+- Conformal: target coverage 90%, empirical 89.25%, singleton rate 65.42%
 
 ### Blocked generalisation
-- Leave-one-region-out: worst AUC 0.8164, mean 0.8432 over 4 regions
-- Rolling origin: worst AUC 0.8018, mean 0.8362 over 5 years
+- Leave-one-region-out: worst AUC 0.8155, mean 0.8427 over 4 regions
+- Rolling origin: worst AUC 0.8005, mean 0.836 over 5 years
 
 ### Fairness audit (shared threshold)
 - **region**: PASS (under-protected: none)
@@ -122,6 +162,23 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 ### Rare-severe tail
 - fire >=100 acres next day: 83 events, POD 96.39% [91.57%, 100.00%]
 - fire >=1000 acres next day: 37 events, POD 97.30% [91.89%, 100.00%]
+
+### Lead time vs POD (actionable warning)
+- Actionable lead time at POD 80%: **72 h**
+| Lead (h) | POD | FAR | AUC | events |
+|---|---|---|---|---|
+| 24 | 88.76% | 62.78% | 0.8379 | 1673 |
+| 48 | 89.90% | 64.79% | 0.8333 | 1673 |
+| 72 | 88.94% | 64.34% | 0.8305 | 1673 |
+
+### Degraded-input robustness (fixed model, sensors failing)
+- Graceful until POD 70%: **75%** of inputs down
+| Inputs lost | POD | FAR | AUC |
+|---|---|---|---|
+| 0% | 90.02% | 63.55% | 0.8383 |
+| 25% | 89.42% | 63.68% | 0.8284 |
+| 50% | 85.30% | 64.97% | 0.8053 |
+| 75% | 78.42% | 66.50% | 0.774 |
 
 ### Drift + retraining
 - Retrain now: **False** (no drift signal fired)

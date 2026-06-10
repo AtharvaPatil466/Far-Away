@@ -77,6 +77,31 @@ alarm is therefore a stated policy, not an accident of `p >= 0.5`.
   the catalog — every fold respects causality, and the fold sequence doubles
   as the skill-decay curve.
 
+## 5b. Lead time vs POD — actionable warning, not just accuracy
+
+A forecast accurate at t+0 is useless: the water is already at the door. For each
+forecast horizon, a detector is trained for "will the threshold be crossed
+exactly *h* ahead?" and POD/FAR/AUC are reported at the operating threshold
+(`ml/eval/leadtime.py`). The headline is the **actionable lead time** — the
+longest horizon still holding POD ≥ 80% — which must exceed the evacuation
+**clearance time** (Session B's number) or the warning can't drive an
+evacuation. On real flood data the model holds POD ≥ 80% out to ~7 days (AUC
+degrading gracefully 0.98 → 0.90, FAR rising at long lead, as expected). The
+same module emits the **risk trajectory** (p_event per lead horizon) that is the
+agreed interface with the evacuation/decision layer. Earthquakes have no
+forecast horizon and are excluded by design.
+
+## 5c. Degraded-input robustness — skill when the sensors are down
+
+A disaster takes out the very instruments the model needs. Holding the trained
+model fixed (no mid-disaster retraining), the test set is re-scored with a
+rising fraction of inputs failed — dead sensors imputed to the training mean —
+and the **graceful-degradation curve** of POD/AUC is reported
+(`ml/eval/robustness.py`). The headline is the fraction of inputs we can lose
+before POD drops below 70%. On real flood data the model stays useful with up to
+~25% of gauges down, then falls off — reported honestly, never claimed robust
+where it isn't.
+
 ## 6. Calibrated uncertainty
 
 * **Isotonic recalibration** (pool-adjacent-violators) fitted on the
@@ -85,6 +110,48 @@ alarm is therefore a stated policy, not an accident of `p >= 0.5`.
   regardless of model miscalibration; empirical coverage, singleton rate and
   abstain rate are reported. An abstaining set (`{0,1}`) is an explicit
   "send a human" signal.
+
+## 6b. Closing the fairness gaps (equalized-odds remediation)
+
+Revealing a gap isn't enough — the audit now also *remediates* it. Per-group
+operating thresholds are fitted on the **calibration split** (never test) so each
+flagged group reaches the target POD, and the result is reported with the
+**false-alarm cost of equity** made explicit (equity is achievable, not free).
+On the earthquake label both flagged groups (europe-africa region, the
+small-magnitude band) close, at +15% and +3% FAR. On flood, most close; the
+Brahmaputra/northeast residual is reported *and classified by cause* — a
+threshold can't fix weak ranking, so it's flagged as needing better inputs
+(denser upstream gauging / flash-flood features), an actionable finding rather
+than a silent fail. For flood this mirrors real practice: every river gauge
+already has its own warning threshold.
+
+## 6c. External survey-grade cross-check (GDACS)
+
+Beyond the in-house GloFAS proxy, the flood model is cross-checked against an
+**independent** survey-grade source: GDACS (UN OCHA / EC-JRC) declared real
+Indian flood events — authoritative outcomes that never entered training. The
+report asks whether model risk separates GDACS-declared flood days from quiet
+days (AUC) and whether it tracks GDACS severity (Red vs Orange vs quiet). The
+separation is modest by construction — GDACS events are country-level while the
+sites are specific basins, so it's a temporal national check, not per-basin
+localisation — and the report says so. EM-DAT and ReliefWeb were the first
+choices but now gate bulk data (login / approved appname); GDACS is the openly
+fetchable authoritative substitute (`ml/validation/external.py`,
+`fetch.py gdacs`).
+
+## 6d. Full-pipeline historical backtest (shadow mode on the past)
+
+The single most synthesis-level piece: `hindcast/pipeline_backtest.py` replays
+the **whole chain** on real cyclones (Fani 2019, Amphan 2020) —
+forecast → risk trajectory carrying Session A's *validated* FAR/lead reliability
+→ the end-to-end evacuation decision → scored against the documented outcome
+(people evacuated, deaths, landfall intensity). Both reach a protective decision
+(order-now + vertical shelter) consistent with the real large-scale evacuations
+that held the tolls low, and both surface the same transport-dependent equity
+gap. Run `python -m disastermind.hindcast --backtest`. Honest scope: the FAR/lead
+reliability is validated, but the per-storm probability path is a labelled proxy
+for IMD's dynamical forecast, and this is hindcast on documented events — not a
+live shadow season.
 
 ## 7. Fairness audit
 

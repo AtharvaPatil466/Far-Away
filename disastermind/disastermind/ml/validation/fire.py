@@ -62,6 +62,11 @@ SPLIT_YEAR = 2017
 WARMUP_DAYS = 30
 #: Rain day definition (>= 2.6 mm, the standard "wetting rain" cutoff).
 RAIN_MM = 2.6
+#: Lead times (days ahead) for the lead-time-vs-POD curve. Fire ignition is more
+#: stochastic than river flow, but fire WEATHER persists, so 1-3 day warning is
+#: meaningful; ``label_at(h) = a fire is discovered on day t+h``.
+HORIZONS = (1, 2, 3)
+MAX_HORIZON = max(HORIZONS)
 
 
 @dataclass(frozen=True)
@@ -76,10 +81,15 @@ class FireRow:
     label: int  # >=1 real wildfire discovered in the cell on day t+1
     severity: float  # largest fire (acres) discovered in the label window
     angstrom_score: float  # operational baseline, higher = riskier
+    horizon_labels: tuple[int, ...]  # per-HORIZONS: a fire discovered on day t+h
 
     @property
     def year(self) -> int:
         return self.date.year
+
+    def label_at(self, lead_days: int) -> int:
+        """Point-in-time fire label ``lead_days`` ahead (for the lead-time curve)."""
+        return self.horizon_labels[HORIZONS.index(lead_days)]
 
 
 def angstrom_index(tmax_c: float, rh_min_pct: float) -> float:
@@ -117,7 +127,7 @@ def load_rows(path: str = FIXTURE) -> list[FireRow]:
             fire_count[day] += 1
             fire_size[day] = max(fire_size[day], float(f["size_acres"]))
 
-        for t in range(WARMUP_DAYS, n - 1):
+        for t in range(WARMUP_DAYS, n - MAX_HORIZON):
             window_weather = [tmax[t], rh[t], wind[t]]
             p30 = precip[t - 29 : t + 1]
             if any(v is None for v in window_weather) or any(v is None for v in p30):
@@ -160,6 +170,9 @@ def load_rows(path: str = FIXTURE) -> list[FireRow]:
                     label=1 if fire_count[t + 1] > 0 else 0,
                     severity=fire_size[t + 1],
                     angstrom_score=4.0 - angstrom_index(float(tmax[t]), float(rh[t])),
+                    horizon_labels=tuple(
+                        1 if fire_count[t + h] > 0 else 0 for h in HORIZONS
+                    ),
                 )
             )
     return rows
