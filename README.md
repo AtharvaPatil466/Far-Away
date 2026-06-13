@@ -1,9 +1,19 @@
-# DisasterMind — Autonomous Disaster Coordination (Group A)
+# DisasterMind — Multi-Agent Disaster Coordination (Group A)
 
 A multi-agent system that detects a disaster, predicts its evolution, optimises
-the response, and issues field & public orders **autonomously**, escalating to
-humans only when a decision crosses a defined authority threshold. India-focused
-(IMD / CWC / NCS / ISRO Bhuvan feeds) across three hazard modules:
+the response, and drives a **bounded-authority** command pipeline to dispatch.
+India-focused (IMD / CWC / NCS / ISRO Bhuvan feeds) across three hazard modules:
+
+> **Authority model (read this first).** DisasterMind is *decision-support*: a
+> human commander holds authority over every consequential action. Only routine
+> field tasking dispatches without sign-off. Any order crossing a defined
+> authority threshold — **mass evacuations (> 10,000 people)**, cross-jurisdiction
+> resources, military assets, or media broadcast — **requires human approval**
+> (auto-executing only on timeout), and a set of high-consequence actions
+> (declaring a state of emergency, deploying armed forces, international aid,
+> critical-infrastructure requisition) are **human-only and never act without a
+> commander**. The system *recommends*; a human *acts* on the decisions that
+> matter. See [`disastermind/tier1/commander/matrix.py`](disastermind/tier1/commander/matrix.py).
 
 | Module | Hazard | Activates |
 |--------|--------|-----------|
