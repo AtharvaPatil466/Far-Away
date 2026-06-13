@@ -578,6 +578,7 @@ export function Dashboard() {
         <section className="center-column" aria-label="Operational map">
           <div style={{ position: 'relative', height: '100%' }}>
             <LiveMap mapState={mapState} liveShelters={liveShelters} />
+            <div className="scan-line" style={{ position: 'absolute', inset: 0, zIndex: 20 }} />
             <MapLegend />
           </div>
         </section>

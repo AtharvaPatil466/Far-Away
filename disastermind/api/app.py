@@ -246,7 +246,13 @@ def create_app(
     # ------------------------------------------------------------ health/ready
     @app.get("/health")
     def health() -> dict[str, Any]:
-        return svc.health()
+        h = svc.health()
+        # Surface any simulated degradation (resilience demo) so the dashboard can
+        # show it inline; absent/empty by default so the normal payload is unchanged.
+        deg = getattr(app.state, "demo", {}).get("degraded", []) if hasattr(app.state, "demo") else []
+        if deg:
+            h = {**h, "degraded_components": deg}
+        return h
 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:
@@ -325,12 +331,79 @@ def create_app(
             body = ""
         return PlainTextResponse(body, media_type="text/plain; version=0.0.4")
 
+    # ------------------------------------------------------------ degraded-mode demo
+    # A pitch/ops affordance (PRD Step 10 resilience): mark components as
+    # simulated-down so the dashboard can SHOW the system losing a feed/broker and
+    # *still coordinating* on fallbacks. The whole point is resilience, so the
+    # system stays ``operational`` — this only annotates which components are
+    # degraded; it does not disable the real pipeline. Honest, reversible, in-memory.
+    _DEMO_COMPONENTS = {"usgs", "imd", "open-meteo", "firms", "kafka", "postgis",
+                        "timescale", "elasticsearch", "prediction", "routing"}
+
+    def _demo_state() -> dict[str, Any]:
+        st = getattr(app.state, "demo", None)
+        if st is None:
+            st = {"degraded": []}
+            app.state.demo = st
+        return st
+
+    def demo_status() -> dict[str, Any]:
+        deg = _demo_state()["degraded"]
+        return {
+            "degraded_components": deg,
+            "operational": True,  # resilience: degraded != down — we keep coordinating
+            "mode": "degraded" if deg else "nominal",
+            "known_components": sorted(_DEMO_COMPONENTS),
+        }
+
+    def demo_degrade(component: str = "", active: bool = True, reset: bool = False) -> dict[str, Any]:
+        """Toggle a simulated component failure for the resilience demo.
+
+        ``?component=usgs&active=true`` marks USGS degraded; ``active=false`` clears
+        it; ``?reset=true`` clears all. The system remains operational throughout.
+        """
+        st = _demo_state()
+        deg: list[str] = st["degraded"]
+        if reset:
+            deg.clear()
+        elif component:
+            c = component.strip().lower()
+            if active and c not in deg:
+                deg.append(c)
+            elif not active and c in deg:
+                deg.remove(c)
+        return demo_status()
+
+    app.add_api_route("/demo/status", demo_status, methods=["GET"])
+    app.add_api_route("/demo/degrade", demo_degrade, methods=["POST"])
+
     # Register each data route under BOTH the legacy unversioned path and the
     # ``/v1`` prefix (HARD RULE: additive/back-compat). We attach handlers via
     # ``app.add_api_route`` so the same callable backs both paths with one body.
     def _route(path: str, handler: Any, *, methods: list[str]) -> None:
         app.add_api_route(path, handler, methods=methods)
         app.add_api_route(_API_V1 + path, handler, methods=methods, include_in_schema=False)
+
+    # ------------------------------------------------ validation: cyclone backtest
+    _cyclone_cache: dict[str, Any] = {}
+
+    def validation_cyclone() -> Any:
+        """National cyclone backtest metrics over all real IBTrACS landfalling storms.
+
+        Wraps :func:`disastermind.hindcast.cyclone_backtest.run_national_backtest`
+        (lazy; cached after first build). The same JSON the Evidence map renders —
+        92 real storms, per-region activation, honest 'unknown' accounting.
+        """
+        if "data" not in _cyclone_cache:
+            try:
+                from ..hindcast.cyclone_backtest import run_national_backtest
+
+                _cyclone_cache["data"] = run_national_backtest().to_dict()
+            except Exception:  # pragma: no cover - never take the box down
+                return JSONResponse({"error": "cyclone backtest unavailable"}, status_code=503)
+        return _cyclone_cache["data"]
+
+    _route("/validation/cyclone", validation_cyclone, methods=["GET"])
 
     # ------------------------------------------------------------------- topics
     def topics() -> dict[str, int]:

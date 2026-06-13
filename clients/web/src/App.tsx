@@ -3,13 +3,13 @@ import { Dashboard } from './modules/dashboard/Dashboard'
 import { Escalation } from './modules/escalation/Escalation'
 import { Field } from './modules/field/Field'
 import { Report } from './modules/report/Report'
+import { Evidence } from './modules/evidence/Evidence'
 import { SplashScreen } from './shell/SplashScreen'
 import { TopNav, type UnifiedModuleKey } from './shell/TopNav'
 import { OfflineBanner } from './components/OfflineBanner'
 
 function App() {
-  const isMobile = window.innerWidth <= 430 || /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-  const [activeModule, setActiveModule] = useState<UnifiedModuleKey>(isMobile ? 'field' : 'dashboard')
+  const [activeModule, setActiveModule] = useState<UnifiedModuleKey>('dashboard')
   const [bootState, setBootState] = useState<'splash' | 'transition' | 'ready'>('splash')
 
   useEffect(() => {
@@ -30,6 +30,7 @@ function App() {
           {activeModule === 'escalation' && <Escalation />}
           {activeModule === 'field' && <Field />}
           {activeModule === 'report' && <Report />}
+          {activeModule === 'evidence' && <Evidence />}
         </main>
       </div>
 
