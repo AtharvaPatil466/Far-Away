@@ -173,6 +173,6 @@ def load_records_csv(path: str) -> list[EvacRecord]:
                 population=int(float(row["population"])),
                 egress_capacity_pph=float(row["egress_capacity_pph"]),
                 observed_clearance_hours=float(row["observed_clearance_hours"]),
-                observed_participation=float(op) if op not in (None, "") else None,
+                observed_participation=float(op) if op else None,
             ))
     return out
