@@ -83,7 +83,7 @@ degrade gracefully and lets any agent be swapped or scaled independently.
 
 ```bash
 # stdlib-only: no broker, solver, ML lib or network required
-python -m pytest -q                      # 620 tests, all offline (stdlib only)
+python -m pytest -q                      # 1045 tests, all offline (stdlib only)
 
 python - <<'PY'                          # drive a synthetic disaster
 from disastermind.orchestration.build import build_system, should_activate, Signals
@@ -96,6 +96,23 @@ PY
 
 Run the real wall-clock loop: `loop.run(max_cycles=N)` ticks every
 `DM_LOOP_INTERVAL` (default 30 s) while `disaster_active`.
+
+## Reproduce the validation numbers (one command)
+
+Every headline metric in [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) §5 is
+regenerable from the committed real-data fixtures — offline, deterministically,
+with no optional dependencies:
+
+```bash
+make reproduce        # re-runs the full validation suite and diffs vs docs/validation_golden.json
+```
+
+It rebuilds each hazard's out-of-sample **AUC / Brier / ECE** from raw fixtures
+(USGS quakes, GloFAS/ERA5 floods, FPA-FOD/FIRMS fires), prints a claimed-vs-
+reproduced table, and **exits non-zero on any drift**. A clean checkout
+reproduces all 12 metrics exactly (Δ = 0.0000); the same check runs in CI on
+every push, so the published table is a continuously-verified artefact rather
+than a static claim.
 
 ### Optional capabilities (graceful upgrades)
 
