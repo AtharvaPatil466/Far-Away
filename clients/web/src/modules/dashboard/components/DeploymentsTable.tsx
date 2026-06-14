@@ -17,25 +17,29 @@ const TEAM_META: Record<string, { type: string; base: string }> = {
   'UNIT-C1': { type: 'Supply Drops', base: 'Cuttack Relief' },
 }
 
-const STATUS_META: Record<
-  GpsReading['status'],
-  { label: string; dot: string; text: string; border: string; pulse?: boolean }
-> = {
-  active: { label: 'Deployed', dot: 'bg-success', text: 'text-success', border: 'border-success/30' },
-  staged: { label: 'En Route', dot: 'bg-warning', text: 'text-warning', border: 'border-warning/30' },
-  distress: {
-    label: 'Critical',
-    dot: 'bg-error',
-    text: 'text-error',
-    border: 'border-error/30',
-    pulse: true,
-  },
-  offline: {
-    label: 'Offline',
-    dot: 'bg-outline',
-    text: 'text-on-surface-variant',
-    border: 'border-outline-variant/40',
-  },
+type StatusMeta = { label: string; dot: string; text: string; border: string; pulse?: boolean }
+
+const SUCCESS: StatusMeta = { label: 'Deployed', dot: 'bg-success', text: 'text-success', border: 'border-success/30' }
+const ENROUTE: StatusMeta = { label: 'En Route', dot: 'bg-warning', text: 'text-warning', border: 'border-warning/30' }
+const CRITICAL: StatusMeta = { label: 'Critical', dot: 'bg-error', text: 'text-error', border: 'border-error/30', pulse: true }
+const IDLE: StatusMeta = { label: 'Standby', dot: 'bg-outline', text: 'text-on-surface-variant', border: 'border-outline-variant/40' }
+const OFFLINE: StatusMeta = { label: 'Offline', dot: 'bg-outline', text: 'text-on-surface-variant', border: 'border-outline-variant/40' }
+
+// Keyed loosely so BOTH the UI's mock statuses (active/staged/distress/offline)
+// and the live backend GPS-beacon statuses (idle/enroute/onsite/returning, the
+// field STATUS_FLOW) resolve. Unknown values fall back to OFFLINE rather than
+// crashing the row.
+const STATUS_META: Record<string, StatusMeta> = {
+  // UI mock statuses
+  active: SUCCESS,
+  staged: ENROUTE,
+  distress: CRITICAL,
+  offline: OFFLINE,
+  // live backend statuses (disastermind STATUS_FLOW)
+  onsite: SUCCESS,
+  enroute: ENROUTE,
+  returning: ENROUTE,
+  idle: IDLE,
 }
 
 function elapsed(timestamp: string): string {
@@ -65,9 +69,11 @@ export function DeploymentsTable({ teams }: { teams: Record<string, GpsReading> 
           {rows.map((team, i) => {
             const meta = TEAM_META[team.team_id] ?? {
               type: 'Field Unit',
-              base: `${team.location.lat.toFixed(2)}, ${team.location.lon.toFixed(2)}`,
+              base: team.location
+                ? `${team.location.lat.toFixed(2)}, ${team.location.lon.toFixed(2)}`
+                : '—',
             }
-            const status = STATUS_META[team.status]
+            const status = STATUS_META[team.status] ?? OFFLINE
             return (
               <TableRow
                 key={team.team_id}

@@ -28,7 +28,7 @@ export function FeedProvenance() {
 
       <div className="feed-grid">
         {FEED_ADAPTERS.map((a) => {
-          const meta = STATUS_META[a.status]
+          const meta = STATUS_META[a.status] ?? Object.values(STATUS_META)[0]
           const Icon = meta.Icon
           return (
             <div key={a.name} className={`feed-card ${meta.cls}`}>
