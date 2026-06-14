@@ -23,7 +23,9 @@ from .channels import (
     FcmPushChannel,
     FieldRadioChannel,
     IridiumChannel,
+    IvrChannel,
     SmsChannel,
+    WhatsAppChannel,
 )
 from .router import DispatchRouter
 
@@ -39,6 +41,8 @@ def build_channels(
     """
     return [
         SmsChannel(settings=settings, dry_run=dry_run, live=live),
+        WhatsAppChannel(settings=settings, dry_run=dry_run, live=live),
+        IvrChannel(settings=settings, dry_run=dry_run, live=live),
         FcmPushChannel(settings=settings, dry_run=dry_run, live=live),
         IridiumChannel(settings=settings, dry_run=dry_run, live=live),
         CapChannel(settings=settings, dry_run=dry_run, live=live),
