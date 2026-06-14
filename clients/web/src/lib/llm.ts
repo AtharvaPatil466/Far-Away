@@ -44,7 +44,7 @@ async function callOllama(messages: LLMMessage[]): Promise<LLMResponse> {
 // The browser must NOT call Anthropic/Gemini directly — that ships the API key in
 // the JS bundle to every user (and Anthropic blocks browser calls without the
 // dangerous-direct-browser-access header). The DisasterMind backend exposes
-// POST /llm/generate which holds the key SERVER-SIDE and uses claude-opus-4-8.
+// POST /llm/generate which holds the key SERVER-SIDE and uses claude-sonnet-4-6.
 // When no key is configured the backend returns 503 and we fall back to Ollama
 // (and then to an empty response), so the UI never crashes and never fakes prose.
 
@@ -65,7 +65,7 @@ async function callBackend(messages: LLMMessage[]): Promise<LLMResponse> {
   return {
     text: data.text ?? '',
     provider: 'anthropic',
-    model: 'claude-opus-4-8',
+    model: 'claude-sonnet-4-6',
     durationMs: Date.now() - start,
   };
 }
@@ -73,7 +73,7 @@ async function callBackend(messages: LLMMessage[]): Promise<LLMResponse> {
 // ─── UNIFIED ENTRY POINT ──────────────────────────────────────────────────────
 
 /**
- * Call the LLM via the DisasterMind backend proxy (server-side key, claude-opus-4-8).
+ * Call the LLM via the DisasterMind backend proxy (server-side key, claude-sonnet-4-6).
  * Falls back to a local Ollama instance if the backend is unreachable or has no key,
  * then to an empty response so the UI never crashes.
  *

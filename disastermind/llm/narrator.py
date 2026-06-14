@@ -21,7 +21,7 @@ package-local topic :data:`ESCALATION_NARRATIVE` (we never edit
 Text generation is delegated to an :class:`~disastermind.llm.client.LLMClient`.
 By default that is the deterministic, network-free
 :class:`~disastermind.llm.client.TemplateClient`; an
-:class:`~disastermind.llm.client.AnthropicClient` (``claude-opus-4-8``) is used
+:class:`~disastermind.llm.client.AnthropicClient` (``claude-sonnet-4-6``) is used
 only when an API key is configured. Either way the prompt itself is a complete,
 well-structured brief, so the fallback is always usable (PRD Step 10).
 """

@@ -250,7 +250,7 @@ def create_app(
 
         Replaces the frontend's insecure browser->Anthropic call: the Anthropic
         key stays SERVER-SIDE (never shipped to the client), the model is
-        ``claude-opus-4-8`` via the llm layer, and it degrades to a deterministic
+        ``claude-sonnet-4-6`` via the llm layer, and it degrades to a deterministic
         template + the always-available structured report when no key is set.
         Returns ``{markdown, report, narrative, narrative_source}``.
         """
@@ -264,7 +264,7 @@ def create_app(
         except Exception:  # pragma: no cover - never take the box down
             return JSONResponse({"error": "report unavailable"}, status_code=503)
         # Executive summary. With a real Anthropic key (server-side) we ask
-        # claude-opus-4-8 for prose; otherwise (TemplateClient echoes its prompt)
+        # claude-sonnet-4-6 for prose; otherwise (TemplateClient echoes its prompt)
         # we synthesise a deterministic summary from the report itself — never an
         # echoed instruction.
         rpt = out["report"]
@@ -302,7 +302,7 @@ def create_app(
 
         The browser must NOT call Anthropic directly (it would ship the key in the
         bundle and needs the dangerous-direct-browser-access header). This proxies
-        ``{messages:[{role,content}]}`` to ``claude-opus-4-8`` with the key held
+        ``{messages:[{role,content}]}`` to ``claude-sonnet-4-6`` with the key held
         SERVER-SIDE, returning ``{text, source}``. With no key configured it
         returns 503 so the caller falls back to its own deterministic report —
         we never fake LLM prose.

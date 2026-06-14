@@ -17,8 +17,39 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 
 from .server import create_server
+
+
+def _load_dotenv() -> None:
+    """Populate ``os.environ`` from a local ``.env`` (stdlib only, best-effort).
+
+    Mirrors the ``.env`` / ``.env.example`` convention without taking a
+    ``python-dotenv`` dependency (the package stays stdlib-first). Real
+    environment variables always win — already-set keys are never overwritten —
+    so exported secrets and platform-injected vars (Railway/Fly) take priority.
+    Looks in the current working directory and the repository root.
+    """
+    candidates = [Path.cwd() / ".env", Path(__file__).resolve().parents[2] / ".env"]
+    seen: set[Path] = set()
+    for path in candidates:
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        try:
+            for raw in path.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                # Drop inline " # comment" and surrounding quotes.
+                val = val.split(" #", 1)[0].strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+        except OSError:
+            pass
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -45,6 +76,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     """Build + serve the dashboard; return a process exit code."""
+    _load_dotenv()
     args = _parse_args(argv)
     server = create_server()
     try:

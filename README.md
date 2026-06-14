@@ -231,7 +231,7 @@ Built on top of the Group A core (all optional/heavy deps lazy with fallbacks):
 
 * **`llm/`** — Group B escalation layer: `EscalationNarrator` consumes `ESCALATION`
   and emits a human-readable brief on `tier1.escalation_narrative`. Uses Claude
-  (`claude-opus-4-8`) when an API key is set, else a deterministic template — wired
+  (`claude-sonnet-4-6`) when an API key is set, else a deterministic template — wired
   into `build_system`.
 * **`storage/`** — `PostgisResourceRepo`, `TimescaleTelemetryRepo`,
   `ElasticsearchAuditRepo`, `MinioArtifactStore` + a `Storage` facade (offline by

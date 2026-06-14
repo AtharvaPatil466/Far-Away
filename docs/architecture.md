@@ -243,7 +243,7 @@ where `status ∈ {pending, approved, rejected, auto_executed, expired}`.
 The advisory **`EscalationNarrator`** (`llm/narrator.py`) subscribes to
 `tier1.escalation` and emits a five-section human brief (Situation Summary / Why
 This Exceeded Autonomous Authority / Recommended Action / Key Risks / Decision
-Deadline) on `tier1.escalation_narrative`. It uses Claude (`claude-opus-4-8`)
+Deadline) on `tier1.escalation_narrative`. It uses Claude (`claude-sonnet-4-6`)
 when an API key is configured, otherwise a deterministic template. It has
 `decision_authority = False` and never dispatches or mutates the escalation.
 

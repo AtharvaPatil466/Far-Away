@@ -33,7 +33,7 @@ describe('callLLM', () => {
     // Critically: no call to api.anthropic.com / generativelanguage from the browser.
     expect(calls.some((u) => u.includes('anthropic.com') || u.includes('googleapis'))).toBe(false)
     expect(res.text).toBe('hello from backend')
-    expect(res.model).toBe('claude-opus-4-8')
+    expect(res.model).toBe('claude-sonnet-4-6')
     expect(res.provider).toBe('anthropic')
   })
 

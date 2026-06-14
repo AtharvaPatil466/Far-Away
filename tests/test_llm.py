@@ -93,7 +93,7 @@ def test_make_client_selects_anthropic_with_key(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
     client = make_client(Settings())
     assert isinstance(client, AnthropicClient)
-    assert client.model == "claude-opus-4-8"
+    assert client.model == "claude-sonnet-4-6"
 
 
 def test_anthropic_client_degrades_to_prompt_without_sdk(monkeypatch):

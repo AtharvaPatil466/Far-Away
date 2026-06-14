@@ -4,7 +4,7 @@ The narrator depends only on the tiny :class:`LLMClient` protocol
 (``generate(prompt: str) -> str``). Two implementations are provided:
 
   * :class:`AnthropicClient` — lazily imports the ``anthropic`` SDK and calls the
-    ``claude-opus-4-8`` model. Used ONLY when an API key is configured
+    ``claude-sonnet-4-6`` model. Used ONLY when an API key is configured
     (``DM_ANTHROPIC_KEY`` or ``ANTHROPIC_API_KEY``).
   * :class:`TemplateClient` — a deterministic, network-free renderer that turns
     the escalation prompt into a clear structured brief using the standard
@@ -23,7 +23,7 @@ import os
 from ..core.config import Settings
 
 #: The single model this layer is authorised to call (spec requirement).
-ANTHROPIC_MODEL = "claude-opus-4-8"
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
 #: Environment variables that may carry the Anthropic API key.
 KEY_ENV_VARS = ("DM_ANTHROPIC_KEY", "ANTHROPIC_API_KEY")

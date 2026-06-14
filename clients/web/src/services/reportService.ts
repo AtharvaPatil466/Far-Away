@@ -66,7 +66,7 @@ Current timestamp: ${new Date().toISOString()}
 Generate the post-incident report now.`
 
   // Routed through the DisasterMind backend proxy (POST /llm/generate) — the
-  // Anthropic key stays server-side (claude-opus-4-8), never in the browser bundle.
+  // Anthropic key stays server-side (claude-sonnet-4-6), never in the browser bundle.
   const { text: rawText } = await callLLM([
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: userMessage },

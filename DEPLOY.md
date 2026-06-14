@@ -202,7 +202,7 @@ lower them only if you have a reason to.
 | `DM_TWILIO_SID` / `DM_TWILIO_TOKEN` | `` | SMS dispatch (blank → dry-run). |
 | `DM_FCM_KEY` | `` | Push dispatch (blank → dry-run). |
 | `DM_IRIDIUM_URL` | `` | Satellite dispatch endpoint. |
-| `DM_ANTHROPIC_KEY` | `` | LLM escalation layer (blank → deterministic template, no network). Alias `ANTHROPIC_API_KEY`. Uses `claude-opus-4-8` when set. |
+| `DM_ANTHROPIC_KEY` | `` | LLM escalation layer (blank → deterministic template, no network). Alias `ANTHROPIC_API_KEY`. Uses `claude-sonnet-4-6` when set. |
 
 ---
 
