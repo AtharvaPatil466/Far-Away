@@ -4,13 +4,9 @@ import { useEscalations } from '@/hooks/useEscalations'
 import { connectWebSocket } from '@/lib/disasterApi'
 import { SYNTHETIC_MAP_STATE } from '@/lib/mapTypes'
 import type { MapState, EscalationItem } from '@/lib/mapTypes'
-import { Card, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import { LiveMap } from './components/LiveMap'
-import { DeploymentsTable } from './components/DeploymentsTable'
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -27,9 +23,9 @@ const PRIORITY_META: Record<
   EscalationItem['priority'],
   { label: string; border: string; text: string }
 > = {
-  CRITICAL: { label: 'Priority 1', border: 'border-l-error', text: 'text-error' },
-  HIGH: { label: 'Priority 2', border: 'border-l-on-tertiary-container', text: 'text-on-tertiary-container' },
-  MEDIUM: { label: 'Priority 3', border: 'border-l-secondary', text: 'text-secondary' },
+  CRITICAL: { label: 'PRI-1', border: 'border-l-error', text: 'text-error' },
+  HIGH: { label: 'PRI-2', border: 'border-l-secondary', text: 'text-secondary' },
+  MEDIUM: { label: 'PRI-3', border: 'border-l-outline', text: 'text-on-surface-variant' },
 }
 
 const TRIGGER_ICON: Record<string, string> = {
@@ -51,107 +47,77 @@ function countdown(item: EscalationItem, now: number): string {
   return `T-${m}:${s}`
 }
 
-/* ------------------------------------------------------------ KPI card */
+/* ---------------------------------------------------------------- bento cards */
 
-interface KpiProps {
+const cardBase = 'bg-card border border-outline-variant rounded-xl'
+
+function StatCard({
+  label,
+  value,
+  unit,
+  icon,
+  iconTone = 'primary',
+  children,
+}: {
   label: string
-  value: number | string
+  value: string | number
+  unit?: string
   icon: string
-  hint: string
-  hintIcon: string
-  tone?: 'default' | 'critical'
-}
-
-function KpiCard({ label, value, icon, hint, hintIcon, tone = 'default' }: KpiProps) {
-  const critical = tone === 'critical'
+  iconTone?: 'primary' | 'secondary' | 'outline'
+  children: React.ReactNode
+}) {
+  const toneClass =
+    iconTone === 'secondary' ? 'text-secondary' : iconTone === 'outline' ? 'text-outline' : 'text-primary'
   return (
-    <Card
-      className={cn(
-        'dm-lift flex flex-col justify-between p-4',
-        critical && 'border-error/20 bg-error-container/30',
-      )}
-    >
-      <div className="mb-2 flex items-start justify-between">
-        <span
-          className={cn(
-            'text-label-md uppercase',
-            critical ? 'text-on-error-container' : 'text-on-surface-variant',
-          )}
-        >
-          {label}
-        </span>
-        <Icon name={icon} className={cn('text-[22px]', critical ? 'text-on-error-container' : 'text-primary')} />
+    <div className={cn(cardBase, 'dm-lift flex flex-col gap-2 p-md')}>
+      <div className="flex items-start justify-between">
+        <span className="text-sm text-on-surface-variant">{label}</span>
+        <Icon name={icon} className={cn('text-[18px]', toneClass)} />
       </div>
-      <div
-        className={cn(
-          'text-headline-lg',
-          critical ? 'text-on-error-container' : 'text-primary',
-        )}
-      >
+      <div className="text-3xl font-bold text-on-surface">
         {value}
+        {unit && <span className="ml-1 text-sm font-normal text-on-surface-variant">{unit}</span>}
       </div>
-      <div
-        className={cn(
-          'mt-1 flex items-center gap-1 text-body-sm',
-          critical ? 'text-on-error-container' : 'text-on-surface-variant',
-        )}
-      >
-        <Icon name={hintIcon} className="text-[16px]" />
-        {hint}
-      </div>
-    </Card>
+      <div className="mt-auto">{children}</div>
+    </div>
   )
 }
 
-/* ------------------------------------------------ escalation queue item */
-
-interface QueueItemProps {
-  item: EscalationItem
-  now: number
-  onDispatch: (id: string) => void
-  onAcknowledge: (id: string) => void
-}
-
-function QueueItem({ item, now, onDispatch, onAcknowledge }: QueueItemProps) {
+function QueueItem({ item, now }: { item: EscalationItem; now: number }) {
   const meta = PRIORITY_META[item.priority]
   const icon = TRIGGER_ICON[item.trigger] ?? 'warning'
   return (
     <div
       className={cn(
-        'dm-press cursor-pointer rounded border border-l-4 border-outline-variant/30 bg-surface p-3 hover:bg-surface-container-highest',
+        'dm-press flex cursor-pointer flex-col gap-1 rounded-r border-l-2 bg-[#1a1a1a] p-3 transition-colors hover:bg-surface-container-high',
         meta.border,
       )}
     >
-      <div className="mb-1 flex items-start justify-between gap-2">
-        <span className={cn('flex items-center gap-1.5 text-label-md uppercase', meta.text)}>
-          <Icon name={icon} className="text-[16px]" />
-          {meta.label} · {item.trigger.replace(/_/g, ' ').toLowerCase()}
+      <div className="flex items-center justify-between">
+        <span className={cn('flex items-center gap-1.5 text-code-sm', meta.text)}>
+          <Icon name={icon} className="text-[13px]" />
+          {meta.label} / {item.trigger.replace(/_/g, ' ')}
         </span>
-        <span className="shrink-0 font-mono text-label-sm tabular-nums text-on-surface-variant">
-          {countdown(item, now)}
-        </span>
+        <span className="text-code-sm text-[10px] text-on-surface-variant">{countdown(item, now)}</span>
       </div>
-      <h3 className="mb-1 text-body-md font-bold text-primary">{item.zone}</h3>
-      <p className="line-clamp-2 text-body-sm text-on-surface-variant">{item.memo.situation}</p>
-      {item.status === 'PENDING' && (
-        <div className="mt-2 flex gap-2">
-          <Button size="sm" variant="accent" onClick={() => onDispatch(item.id)}>
-            Dispatch
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => onAcknowledge(item.id)}>
-            Acknowledge
-          </Button>
-        </div>
-      )}
+      <div className="text-sm font-medium text-on-surface">{item.zone}</div>
+      <div className="truncate text-xs text-on-surface-variant">{item.memo.situation}</div>
     </div>
   )
 }
 
-/* ------------------------------------------------------------- Dashboard */
+const READINESS = [
+  { label: 'Naval', icon: 'sailing', pct: 85, tone: 'primary' as const },
+  { label: 'Air', icon: 'flight', pct: 42, tone: 'secondary' as const },
+  { label: 'Medical', icon: 'local_hospital', pct: 95, tone: 'primary' as const },
+  { label: 'Transport', icon: 'fire_truck', pct: 70, tone: 'primary' as const },
+]
+
+/* ------------------------------------------------------------------ Dashboard */
 
 export function Dashboard() {
   const { status, setWsState } = useApiStatus()
-  const { escalations, pending, approve, overrideItem } = useEscalations()
+  const { pending } = useEscalations()
   const [mapState, setMapState] = useState<MapState>(SYNTHETIC_MAP_STATE)
   const now = useNow(1000)
 
@@ -224,114 +190,124 @@ export function Dashboard() {
     () => mapState.riskCells.filter((c) => c.probability >= 0.7).length,
     [mapState.riskCells],
   )
-  const criticalCount = pending.filter((e) => e.priority === 'CRITICAL').length
+  const zoneCoverage = mapState.riskCells.length
+    ? Math.round((highRiskZones / mapState.riskCells.length) * 100)
+    : 0
 
   return (
-    <div className="dm-scroll h-full overflow-y-auto bg-surface p-gutter md:p-margin-desktop">
-      <div className="dm-stagger mx-auto flex h-full max-w-[1440px] flex-col gap-6">
-        {/* Header */}
-        <div className="flex shrink-0 flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <h1 className="text-headline-lg text-primary">Commander Dashboard</h1>
-            <p className="mt-1 text-body-md text-on-surface-variant">
-              Sector 7 Command · Cyclone Remal Response · Odisha Coast
-            </p>
-          </div>
-          <Badge variant={status.backendOnline ? 'success' : 'warning'} className="self-start md:self-auto">
-            <span
-              className={cn(
-                'h-2 w-2 rounded-full',
-                status.backendOnline ? 'animate-pulse bg-success' : 'bg-on-tertiary-container',
-              )}
-            />
-            {status.backendOnline ? 'Group A Backend Live' : 'Simulation Mode'}
-          </Badge>
-        </div>
-
-        {/* KPI row */}
-        <div className="grid shrink-0 grid-cols-1 gap-6 md:grid-cols-3">
-          <KpiCard
-            label="Active Incidents"
-            value={highRiskZones}
-            icon="local_fire_department"
-            hintIcon="arrow_upward"
-            hint={`${mapState.riskCells.length} risk zones tracked`}
-          />
-          <KpiCard
-            label="Units Deployed"
-            value={unitCount}
-            icon="groups"
-            hintIcon="check_circle"
-            hint={`${activeUnits} active · ${unitCount - activeUnits} staged`}
-          />
-          <KpiCard
-            label="Critical Escalations"
-            value={criticalCount}
-            icon="warning"
-            hintIcon="priority_high"
-            hint="Requires immediate review"
-            tone="critical"
-          />
-        </div>
-
-        {/* Map + queue */}
-        <div className="grid min-h-[460px] flex-1 grid-cols-1 gap-6 lg:grid-cols-12">
-          <Card className="flex flex-col overflow-hidden p-0 lg:col-span-8">
-            <CardHeader>
-              <CardTitle>Live Operations Map</CardTitle>
+    <div className="dm-scroll h-full overflow-y-auto p-margin">
+      <div className="dm-stagger mx-auto grid max-w-[1600px] grid-cols-1 gap-margin pb-xl md:grid-cols-12">
+        {/* Left: map + stats */}
+        <div className="flex flex-col gap-margin md:col-span-8">
+          {/* Operational map */}
+          <div className={cn(cardBase, 'flex h-[400px] flex-col overflow-hidden shadow-sm')}>
+            <div className="z-10 flex items-center justify-between border-b border-outline-variant bg-card/80 px-md py-sm backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <Icon name="public" className="text-[20px] text-primary" />
+                <h2 className="text-[16px] font-bold text-on-surface">Operational Overview</h2>
+              </div>
               <span
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded border px-2 py-1 text-label-sm uppercase',
+                  'flex items-center gap-1 rounded border px-2 py-1 text-code-sm text-[11px]',
                   wsLive
-                    ? 'border-error/30 bg-surface text-error'
-                    : 'border-outline-variant/40 bg-surface text-on-surface-variant',
+                    ? 'border-primary/20 bg-primary/10 text-primary'
+                    : 'border-outline-variant bg-surface-container text-on-surface-variant',
                 )}
               >
-                <span className={cn('h-2 w-2 rounded-full', wsLive ? 'animate-pulse bg-error' : 'bg-outline')} />
-                {wsLive ? 'Live' : status.wsState === 'connecting' ? 'Connecting' : 'Reconnecting'}
+                <span className={cn('h-1.5 w-1.5 rounded-full', wsLive ? 'animate-pulse bg-primary' : 'bg-outline')} />
+                {wsLive ? 'LIVE' : 'RECONNECTING'}
               </span>
-            </CardHeader>
-            <div className="relative flex-1">
+            </div>
+            <div className="relative flex-1 bg-[#0b0b0b]">
               <LiveMap mapState={mapState} className="absolute inset-0" />
             </div>
-          </Card>
+          </div>
 
-          <Card className="flex flex-col overflow-hidden p-0 lg:col-span-4">
-            <CardHeader>
-              <CardTitle>Escalation Queue</CardTitle>
-              <Badge variant="solid">{criticalCount} Critical</Badge>
-            </CardHeader>
-            <div className="dm-scroll flex flex-1 flex-col gap-2 overflow-y-auto p-3">
-              {pending.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center text-on-surface-variant">
-                  <Icon name="task_alt" className="text-[32px] text-success" />
-                  <p className="text-body-sm">Queue clear — no pending escalations</p>
-                </div>
-              ) : (
-                pending.map((item) => (
-                  <QueueItem
-                    key={item.id}
-                    item={item}
-                    now={now}
-                    onDispatch={approve}
-                    onAcknowledge={(id) => overrideItem(id, 'Acknowledged — manual handling')}
-                  />
-                ))
-              )}
-            </div>
-          </Card>
+          {/* Stat row */}
+          <div className="grid grid-cols-1 gap-margin sm:grid-cols-3">
+            <StatCard label="Active Units" value={unitCount} icon="verified_user">
+              <div className="flex items-center gap-1">
+                <Icon name="trending_up" className="text-[14px] text-primary" />
+                <span className="text-code-sm text-[11px] text-primary">{activeUnits} active</span>
+              </div>
+            </StatCard>
+            <StatCard label="Open Incidents" value={pending.length} icon="warning" iconTone="secondary">
+              <div className="flex items-center gap-1">
+                <Icon name="trending_flat" className="text-[14px] text-outline" />
+                <span className="text-code-sm text-[11px] text-on-surface-variant">Monitoring</span>
+              </div>
+            </StatCard>
+            <StatCard label="Zone Coverage" value={zoneCoverage} unit="%" icon="memory" iconTone="outline">
+              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#262626]">
+                <div className="h-full bg-primary" style={{ width: `${zoneCoverage}%` }} />
+              </div>
+            </StatCard>
+          </div>
         </div>
 
-        {/* Deployments */}
-        <Card className="shrink-0 overflow-hidden p-0">
-          <CardHeader>
-            <CardTitle>Active Deployments Overview</CardTitle>
-            <span className="font-mono text-data-mono tabular-nums text-on-surface-variant">
-              {escalations.length} events · {unitCount} units
-            </span>
-          </CardHeader>
-          <DeploymentsTable teams={mapState.teams} />
-        </Card>
+        {/* Right: escalations + readiness */}
+        <div className="flex flex-col gap-margin md:col-span-4">
+          {/* Escalations queue */}
+          <div className={cn(cardBase, 'flex h-[300px] flex-col p-sm')}>
+            <div className="mb-sm flex items-center justify-between px-1">
+              <h2 className="flex items-center gap-2 text-[16px] font-bold text-on-surface">
+                <Icon name="list_alt" className="text-[18px] text-secondary" />
+                Escalations Queue
+              </h2>
+              <span className="rounded border border-error/20 bg-error/10 px-2 py-0.5 text-code-sm text-[11px] text-error">
+                {pending.filter((e) => e.priority === 'CRITICAL').length} Critical
+              </span>
+            </div>
+            <div className="dm-scroll flex flex-1 flex-col gap-2 overflow-y-auto pr-2">
+              {pending.length === 0 ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center text-on-surface-variant">
+                  <Icon name="task_alt" className="text-[28px] text-primary" />
+                  <p className="text-sm">Queue clear</p>
+                </div>
+              ) : (
+                pending.map((item) => <QueueItem key={item.id} item={item} now={now} />)
+              )}
+            </div>
+          </div>
+
+          {/* Resource readiness */}
+          <div className={cn(cardBase, 'flex flex-1 flex-col p-md')}>
+            <h2 className="mb-md flex items-center gap-2 text-[16px] font-bold text-on-surface">
+              <Icon name="bar_chart" className="text-[18px] text-primary" />
+              Resource Readiness
+            </h2>
+            <div className="flex flex-1 items-end justify-around gap-2 pt-4">
+              {READINESS.map((r) => (
+                <div key={r.label} className="group flex w-full flex-col items-center gap-2">
+                  <span
+                    className={cn(
+                      'text-code-sm text-[10px] text-on-surface-variant transition-colors',
+                      r.tone === 'secondary' ? 'group-hover:text-secondary' : 'group-hover:text-primary',
+                    )}
+                  >
+                    {r.pct}%
+                  </span>
+                  <div className="relative flex h-[120px] w-8 items-end justify-center overflow-hidden rounded-t-sm bg-[#262626]">
+                    <div
+                      className={cn(
+                        'w-full rounded-t-sm shadow-[inset_0_2px_4px_rgba(255,255,255,0.2)]',
+                        r.tone === 'secondary' ? 'bg-secondary' : 'bg-primary',
+                      )}
+                      style={{ height: `${r.pct}%` }}
+                    />
+                  </div>
+                  <Icon
+                    name={r.icon}
+                    className={cn(
+                      'text-[16px] text-on-surface-variant transition-colors',
+                      r.tone === 'secondary' ? 'group-hover:text-secondary' : 'group-hover:text-primary',
+                    )}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

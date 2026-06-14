@@ -1,5 +1,6 @@
 /* ============================================================================
- * Light "tactical sand" styling for the Escalation and Report modules.
+ * Styling for the Escalation and Report modules (themed via @theme tokens,
+ * so it follows the active palette — currently "Deep Midnight" dark).
  *
  * These modules emit semantic class names (.scenario-button, .memo-card,
  * .config-panel, .document-sheet, …) that were styled in the original global
@@ -47,7 +48,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-on-tertiary-container);
+  color: var(--color-primary);
 }
 
 .selector-header h1 {
@@ -87,8 +88,8 @@
 }
 
 .scenario-button:hover {
-  border-color: var(--color-on-tertiary-container);
-  border-left-color: var(--color-on-tertiary-container);
+  border-color: var(--color-primary);
+  border-left-color: var(--color-primary);
   background: var(--color-surface-container-low);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(29, 27, 23, 0.08);
@@ -131,7 +132,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-on-tertiary-container);
+  color: var(--color-primary);
   white-space: nowrap;
 }
 
@@ -230,7 +231,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-on-tertiary-container);
+  color: var(--color-primary);
 }
 
 .memo-row p {
@@ -298,8 +299,8 @@
   transition: opacity 0.15s, background 0.15s;
 }
 
-.approve-button { background: var(--color-success); color: #fff; }
-.override-button { background: var(--color-error); color: #fff; }
+.approve-button { background: var(--color-success); color: var(--color-on-primary); }
+.override-button { background: color-mix(in srgb, var(--color-error) 15%, transparent); color: var(--color-error); border: 1px solid color-mix(in srgb, var(--color-error) 35%, transparent); }
 .approve-button:disabled,
 .override-button:disabled { opacity: 0.45; }
 
@@ -324,8 +325,8 @@
   font: inherit;
   font-size: 14px;
 }
-.override-form textarea:focus { outline: none; border-color: var(--color-on-tertiary-container); }
-.override-form button { align-self: flex-start; background: var(--color-on-tertiary-container); color: #fff; }
+.override-form textarea:focus { outline: none; border-color: var(--color-primary); }
+.override-form button { align-self: flex-start; background: var(--color-primary); color: var(--color-on-primary); }
 .form-error { color: var(--color-error); font-size: 12px; }
 
 .decision-log {
@@ -364,7 +365,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--color-on-tertiary-container);
+  color: var(--color-primary);
 }
 .title-block h1 {
   margin-top: 6px;
@@ -408,18 +409,18 @@
 .incident-card:hover { border-color: var(--color-outline); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(29, 27, 23, 0.07); }
 .incident-card:active { transform: translateY(-1px); }
 .incident-card.selected {
-  border-color: var(--color-on-tertiary-container);
-  box-shadow: inset 0 0 0 1px var(--color-on-tertiary-container);
-  background: color-mix(in srgb, var(--color-on-tertiary-container) 5%, var(--color-surface-container-lowest));
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface-container-lowest));
 }
-.incident-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; color: var(--color-on-tertiary-container); }
+.incident-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; color: var(--color-primary); }
 .incident-title-row h3 { font-size: 16px; font-weight: 700; color: var(--color-primary); }
 .incident-card p { font-size: 13px; color: var(--color-on-surface-variant); line-height: 1.5; }
 .incident-card strong { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--color-primary); }
 
 .check-list, .radio-list { display: flex; flex-direction: column; gap: 12px; }
 .check-row, .radio-row { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
-.check-row input, .radio-row input { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--color-on-tertiary-container); }
+.check-row input, .radio-row input { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--color-primary); }
 .check-row span { font-size: 14px; color: var(--color-on-surface); }
 .radio-row span { display: flex; flex-direction: column; gap: 1px; font-size: 13px; color: var(--color-on-surface-variant); }
 .radio-row span strong { font-size: 14px; color: var(--color-on-surface); }
@@ -429,8 +430,8 @@
   padding: 14px;
   border-radius: 8px;
   border: none;
-  background: var(--color-on-tertiary-container);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -480,14 +481,14 @@
   margin-bottom: 20px;
   border-radius: 8px;
   font-size: 13px;
-  color: var(--color-on-tertiary-container);
-  background: color-mix(in srgb, var(--color-on-tertiary-container) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-on-tertiary-container) 22%, transparent);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
 .report-section { margin-bottom: 28px; }
 .report-section h2 { font-size: 18px; font-weight: 700; color: var(--color-primary); }
-.section-rule { height: 2px; width: 56px; margin: 8px 0 14px; background: var(--color-on-tertiary-container); border-radius: 2px; }
+.section-rule { height: 2px; width: 56px; margin: 8px 0 14px; background: var(--color-primary); border-radius: 2px; }
 .report-section p { font-size: 15px; line-height: 1.7; color: var(--color-on-surface-variant); margin-bottom: 10px; }
 
 .report-footer {
@@ -524,14 +525,14 @@
   transition: background 0.15s;
 }
 .action-bar button:hover { background: var(--color-surface-container-high); }
-.action-bar button:first-child { background: var(--color-on-tertiary-container); color: #fff; border-color: transparent; }
+.action-bar button:first-child { background: var(--color-primary); color: var(--color-on-primary); border-color: transparent; }
 
 /* report loading */
 .loading-report { display: flex; flex-direction: column; gap: 22px; }
 .loading-copy h2 { font-size: 18px; font-weight: 700; color: var(--color-primary); }
 .loading-copy p { margin-top: 4px; font-size: 14px; color: var(--color-on-surface-variant); }
 .progress-bar { height: 6px; border-radius: 999px; background: var(--color-surface-container-high); overflow: hidden; }
-.progress-bar > div { height: 100%; width: 40%; border-radius: 999px; background: var(--color-on-tertiary-container); animation: dm-progress 1.4s ease-in-out infinite; }
+.progress-bar > div { height: 100%; width: 40%; border-radius: 999px; background: var(--color-primary); animation: dm-progress 1.4s ease-in-out infinite; }
 @keyframes dm-progress { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
 .loading-sections { display: flex; flex-direction: column; gap: 12px; }
 .loading-section { display: flex; flex-direction: column; gap: 6px; opacity: 0; animation: dm-fade-in 0.4s ease forwards; }
@@ -550,9 +551,9 @@
 .chart-frame { width: 100%; height: 260px; }
 .outcome-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .outcome-header h2 { font-size: 16px; font-weight: 700; color: var(--color-primary); }
-.outcome-header strong { font-size: 24px; font-weight: 700; color: var(--color-on-tertiary-container); font-variant-numeric: tabular-nums; }
+.outcome-header strong { font-size: 24px; font-weight: 700; color: var(--color-primary); font-variant-numeric: tabular-nums; }
 .progress-track { height: 12px; border-radius: 999px; background: var(--color-surface-container-high); overflow: hidden; }
-.progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--color-on-tertiary-container), var(--color-tertiary-container)); }
+.progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--color-primary), var(--color-tertiary-container)); }
 .outcome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
 .outcome-grid > div { display: flex; flex-direction: column; gap: 2px; }
 .outcome-grid span { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-on-surface-variant); }

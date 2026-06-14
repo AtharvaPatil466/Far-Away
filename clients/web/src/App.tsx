@@ -23,10 +23,10 @@ function App() {
     return () => window.clearTimeout(splashTimer)
   }, [])
 
-  // Opt the document into the light "tactical sand" surface.
+  // Opt the document into the "Deep Midnight" surface.
   useEffect(() => {
-    document.body.classList.add('dm-light')
-    return () => document.body.classList.remove('dm-light')
+    document.body.classList.add('dm-app')
+    return () => document.body.classList.remove('dm-app')
   }, [])
 
   // The field interface is a self-contained full-screen mobile app.
