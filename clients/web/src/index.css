@@ -2,8 +2,8 @@
    DISASTERMIND — Stitch "Aeronautic" Design System
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Anybody:wght@600;700;800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
+/* Fonts are loaded via <link> in index.html — this file is imported into a
+   cascade layer, where @import is not permitted. */
 
 /* ── MD3 Dark "Aeronautic" token set ─────────────────────── */
 :root {
