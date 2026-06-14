@@ -11,35 +11,41 @@ The default deployment is **fully offline / stdlib-first**: it builds the agent
 DAG, serves the dashboard, and drives a synthetic incident stream. No database,
 no message broker, and no external feed credentials are required to get a green
 deploy. You turn on durability, live feeds, and auth incrementally with `DM_*`
-environment variables — every one of them is OFF by default.
+environment variables — every one of them is OFF by default. Those
+live-infrastructure paths (Postgres/Timescale, Kafka, external feeds) are *wired*
+and exercised by the test suite, but they are **not load-proven in CI** — treat
+production capacity, throughput, and failover as still to be validated under real
+load before relying on them operationally.
 
 ---
 
 ## 0. Repository layout (read this first)
 
-The git repository root is the **parent** of the Python project. The project —
-the `pyproject.toml`, the `Dockerfile`, `railway.json`, and the `disastermind/`
-package — lives in a **subdirectory** called `disastermind/`:
+The Python project lives at the **git repository root**. `pyproject.toml`, the
+`Dockerfile`, and `railway.json` are all at the root; `disastermind/` is just the
+Python **package**, not a nested project root:
 
 ```
-<git root>/
-└── disastermind/            <-- set Railway "Root Directory" to THIS
-    ├── Dockerfile           <-- builder Railway must find
-    ├── railway.json
-    ├── pyproject.toml
-    └── disastermind/        <-- the Python package
-        ├── api/             (DashboardServer, create_server, app.create_app)
-        ├── core/config.py   (Settings — the DM_* env table)
-        ├── security/        (auth.py, ratelimit.py)
-        └── persistence/     (build.py — DM_PERSIST)
+<git root>/                  <-- Railway "Root Directory" stays here (the default)
+├── Dockerfile               <-- builder Railway must find (at the root)
+├── railway.json
+├── pyproject.toml
+├── Makefile
+└── disastermind/            <-- the Python package (NOT the build root)
+    ├── api/             (DashboardServer, create_server, app.create_app)
+    ├── core/config.py   (Settings — the DM_* env table)
+    ├── security/        (auth.py, ratelimit.py)
+    └── persistence/     (build.py — DM_PERSIST)
 ```
 
-> ### THE #1 GOTCHA — Root Directory
+> ### Root Directory — leave it at the repo root
 > Railway's Dockerfile builder looks for `Dockerfile` at the **service root**.
-> Because the `Dockerfile` is in the `disastermind/` **subdirectory**, you MUST
-> set the service's **Root Directory** to `disastermind`. If you skip this the
-> build fails with "Dockerfile does not exist" (or Railway falls back to
-> Nixpacks and builds the wrong thing). See the RUNBOOK "build fails" entry.
+> Because the `Dockerfile`, `railway.json`, and `pyproject.toml` now all live at
+> the **repository root**, leave the service's **Root Directory** at its default
+> (the repo root). Do **not** set it to `disastermind` — that is the *package*
+> directory, which has no `Dockerfile`, so the build would fail with "Dockerfile
+> does not exist." (This changed with the repository restructure; any older
+> instruction to set Root Directory to `disastermind` is stale.)
 
 ---
 
@@ -47,17 +53,19 @@ package — lives in a **subdirectory** called `disastermind/`:
 
 1. In the Railway dashboard, **New Project → Deploy from GitHub repo**.
 2. Authorize Railway and pick the repository that contains DisasterMind.
-3. Railway creates a service and attempts a first build. It will likely fail or
-   build the wrong directory until you complete step 2 — that is expected.
+3. Railway creates a service and attempts a first build. Because the `Dockerfile`
+   is at the repository root, the default Root Directory is correct and the build
+   should pick it up directly.
 
-## 2. Set the Root Directory (the #1 gotcha)
+## 2. Confirm the Root Directory + builder
 
 1. Open the service → **Settings → Source / Build**.
-2. Set **Root Directory** to `disastermind`.
+2. Leave **Root Directory** at its default (the repository root / blank). Do
+   **not** set it to `disastermind` — see §0.
 3. Confirm the **Builder** is **Dockerfile** (this is what `railway.json`
    declares: `"builder": "DOCKERFILE"`, `"dockerfilePath": "Dockerfile"`).
 
-With Root Directory set, Railway uses the project's `railway.json`:
+Railway then uses the project's root-level `railway.json`:
 
 ```json
 {

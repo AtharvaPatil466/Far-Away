@@ -42,11 +42,13 @@ def meta_population(observations: list, default: int) -> int:
 class CyclonePredictionAgent(_PredictionAgent):
     """Module A flood/cyclone inundation forecaster (PRD Step 3 Module A).
 
-    Production interface (lazy): an XGBoost tabular model over hydro-met drivers
-    fused with a U-Net CNN inundation raster — an ensemble. When those libraries
-    are absent (stdlib-only test environment) we fall back to a deterministic
-    inundation-probability heuristic over a 100 m :class:`GridCell` lattice at
-    horizons T+6/12/24/48 h, plus population_at_risk.
+    Prediction interface (lazy): a gradient-boosted (XGBoost) tabular model over
+    hydro-met drivers. When that library is absent (the default stdlib-only
+    environment) we fall back to the deterministic inundation-probability
+    heuristic over a 100 m :class:`GridCell` lattice at horizons T+6/12/24/48 h,
+    plus population_at_risk — the configuration whose skill is validated in
+    ``disastermind/ml/validation``. (No spatial-CNN / U-Net raster model exists;
+    flood risk is tabular-only.)
     """
 
     module = Module.CYCLONE_FLOOD

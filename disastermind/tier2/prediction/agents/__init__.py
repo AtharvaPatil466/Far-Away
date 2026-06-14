@@ -7,9 +7,9 @@ risk payload published on :data:`~disastermind.core.contracts.Topic.PREDICTION`:
   (A) :class:`CyclonePredictionAgent`
         Module A (cyclone / flood). PRD Step 3 Module A: per-100m grid-cell
         inundation probability at horizons T+6/12/24/48h with population-at-risk.
-        Production interface = XGBoost (tabular drivers) + U-Net CNN (spatial
-        inundation raster) ENSEMBLE; stdlib FALLBACK = a deterministic
-        rainfall/surge/elevation heuristic.
+        Prediction interface = gradient-boosted XGBoost over tabular drivers
+        (optional); stdlib FALLBACK = a deterministic rainfall/surge/elevation
+        heuristic — the validated default. (Tabular only; no U-Net / spatial CNN.)
 
   (B) :class:`EarthquakeImpactAgent`
         Module B (earthquake). PRD Step 3 Module B: HAZUS-style fragility
