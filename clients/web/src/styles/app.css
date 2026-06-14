@@ -21,84 +21,84 @@
  * each `--text-*` into a sized text- utility, etc.
  * ------------------------------------------------------------------------ */
 @theme {
-  /* Fonts */
-  --font-sans: 'Source Sans 3', system-ui, -apple-system, sans-serif;
-  --font-mono: 'Source Sans 3', ui-monospace, monospace;
+  /* Fonts — Deep Midnight (Hanken Grotesk + JetBrains Mono) */
+  --font-sans: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
 
-  /* Material-3 palette ("tactical sand") */
-  --color-background: #fff8f1;
-  --color-foreground: #1d1b17;
-  --color-on-background: #1d1b17;
+  /* Material-3 palette ("Deep Midnight" — emerald primary, pink secondary) */
+  --color-background: #131313;
+  --color-foreground: #e5e2e1;
+  --color-on-background: #e5e2e1;
 
-  --color-surface: #fff8f1;
-  --color-surface-bright: #fff8f1;
-  --color-surface-dim: #dfd9d2;
-  --color-surface-variant: #e8e2da;
-  --color-surface-tint: #5d5e61;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f9f3eb;
-  --color-surface-container: #f3ede5;
-  --color-surface-container-high: #ede7e0;
-  --color-surface-container-highest: #e8e2da;
+  --color-surface: #131313;
+  --color-surface-bright: #3a3939;
+  --color-surface-dim: #131313;
+  --color-surface-variant: #353534;
+  --color-surface-tint: #4edea3;
+  --color-surface-container-lowest: #0e0e0e;
+  --color-surface-container-low: #1c1b1b;
+  --color-surface-container: #201f1f;
+  --color-surface-container-high: #2a2a2a;
+  --color-surface-container-highest: #353534;
 
-  --color-on-surface: #1d1b17;
-  --color-on-surface-variant: #44474a;
-  --color-inverse-surface: #33302b;
-  --color-inverse-on-surface: #f6f0e8;
+  --color-on-surface: #e5e2e1;
+  --color-on-surface-variant: #bbcabf;
+  --color-inverse-surface: #e5e2e1;
+  --color-inverse-on-surface: #313030;
 
-  --color-primary: #000101;
-  --color-on-primary: #ffffff;
-  --color-primary-container: #1a1c1e;
-  --color-on-primary-container: #838486;
-  --color-primary-fixed: #e2e2e5;
-  --color-primary-fixed-dim: #c6c6c9;
-  --color-on-primary-fixed: #1a1c1e;
-  --color-on-primary-fixed-variant: #454749;
-  --color-inverse-primary: #c6c6c9;
+  --color-primary: #4edea3;
+  --color-on-primary: #003824;
+  --color-primary-container: #10b981;
+  --color-on-primary-container: #00422b;
+  --color-primary-fixed: #6ffbbe;
+  --color-primary-fixed-dim: #4edea3;
+  --color-on-primary-fixed: #002113;
+  --color-on-primary-fixed-variant: #005236;
+  --color-inverse-primary: #006c49;
 
-  --color-secondary: #5f5e59;
-  --color-on-secondary: #ffffff;
-  --color-secondary-container: #e5e2db;
-  --color-on-secondary-container: #65645f;
-  --color-secondary-fixed: #e5e2db;
-  --color-secondary-fixed-dim: #c9c6c0;
-  --color-on-secondary-fixed: #1c1c18;
-  --color-on-secondary-fixed-variant: #474742;
+  --color-secondary: #ffafd3;
+  --color-on-secondary: #620040;
+  --color-secondary-container: #85145a;
+  --color-on-secondary-container: #ff93c8;
+  --color-secondary-fixed: #ffd8e7;
+  --color-secondary-fixed-dim: #ffafd3;
+  --color-on-secondary-fixed: #3d0026;
+  --color-on-secondary-fixed-variant: #85145a;
 
-  --color-tertiary: #030000;
-  --color-on-tertiary: #ffffff;
-  --color-tertiary-container: #3c0900;
-  --color-on-tertiary-container: #c66b52;
-  --color-tertiary-fixed: #ffdbd1;
-  --color-tertiary-fixed-dim: #ffb5a1;
-  --color-on-tertiary-fixed: #3b0900;
-  --color-on-tertiary-fixed-variant: #79301b;
+  --color-tertiary: #c0c1ff;
+  --color-on-tertiary: #1000a9;
+  --color-tertiary-container: #9699ff;
+  --color-on-tertiary-container: #1d17b2;
+  --color-tertiary-fixed: #e1e0ff;
+  --color-tertiary-fixed-dim: #c0c1ff;
+  --color-on-tertiary-fixed: #07006c;
+  --color-on-tertiary-fixed-variant: #2f2ebe;
 
-  --color-error: #ba1a1a;
-  --color-on-error: #ffffff;
-  --color-error-container: #ffdad6;
-  --color-on-error-container: #93000a;
+  --color-error: #ffb4ab;
+  --color-on-error: #690005;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
 
-  --color-success: #1b5e20;
-  --color-warning: #f57f17;
+  --color-success: #4edea3;
+  --color-warning: #ffd8a8;
 
-  --color-outline: #75777a;
-  --color-outline-variant: #c5c6ca;
+  --color-outline: #86948a;
+  --color-outline-variant: #3c4a42;
 
   /* shadcn/ui bridge — semantic aliases used by the UI primitives */
-  --color-card: #ffffff;
-  --color-card-foreground: #1d1b17;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #1d1b17;
-  --color-muted: #f3ede5;
-  --color-muted-foreground: #44474a;
-  --color-accent: #ede7e0;
-  --color-accent-foreground: #1d1b17;
-  --color-destructive: #ba1a1a;
-  --color-destructive-foreground: #ffffff;
-  --color-border: #c5c6ca;
-  --color-input: #c5c6ca;
-  --color-ring: #5d5e61;
+  --color-card: #121212;
+  --color-card-foreground: #e5e2e1;
+  --color-popover: #1a1a1a;
+  --color-popover-foreground: #e5e2e1;
+  --color-muted: #201f1f;
+  --color-muted-foreground: #bbcabf;
+  --color-accent: #2a2a2a;
+  --color-accent-foreground: #e5e2e1;
+  --color-destructive: #93000a;
+  --color-destructive-foreground: #ffb4ab;
+  --color-border: #3c4a42;
+  --color-input: #3c4a42;
+  --color-ring: #4edea3;
 
   /* Typography scale */
   --text-headline-lg: 32px;
@@ -144,15 +144,42 @@
   --text-data-mono--line-height: 20px;
   --text-data-mono--font-weight: 600;
 
-  /* Layout spacing tokens (Stitch grid) */
+  /* Layout spacing tokens (Deep Midnight grid) */
+  --spacing-base: 4px;
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
   --spacing-gutter: 16px;
+  --spacing-md: 20px;
+  --spacing-margin: 24px;
+  --spacing-lg: 32px;
+  --spacing-xl: 48px;
   --spacing-margin-mobile: 16px;
   --spacing-margin-desktop: 32px;
+
+  /* Deep Midnight type ramp (Hanken Grotesk / JetBrains Mono) */
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 1.1;
+  --text-display-lg--letter-spacing: -0.02em;
+  --text-display-lg--font-weight: 700;
+
+  --text-body-base: 16px;
+  --text-body-base--line-height: 24px;
+  --text-body-base--font-weight: 400;
+
+  --text-label-xs: 12px;
+  --text-label-xs--line-height: 16px;
+  --text-label-xs--font-weight: 600;
+
+  --text-code-sm: 13px;
+  --text-code-sm--line-height: 16px;
+  --text-code-sm--letter-spacing: 0.05em;
+  --text-code-sm--font-weight: 500;
 
   /* Radius scale */
   --radius: 0.25rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+  --radius-full: 9999px;
 }
 
 /* --------------------------------------------------------------------------
@@ -166,6 +193,25 @@
     color: var(--color-on-background);
     font-family: var(--font-sans);
     min-width: 0;
+  }
+
+  /* Deep Midnight tactical scrollbars on the converted (dark) surface */
+  body.dm-light ::-webkit-scrollbar { width: 8px; height: 8px; }
+  body.dm-light ::-webkit-scrollbar-track { background: var(--color-surface-container-low); }
+  body.dm-light ::-webkit-scrollbar-thumb {
+    background: var(--color-surface-variant);
+    border-radius: 4px;
+  }
+  body.dm-light ::-webkit-scrollbar-thumb:hover { background: var(--color-outline-variant); }
+
+  /* Soft emerald glow utilities lifted from the Stitch export */
+  .glow-primary { box-shadow: inset 0 2px 10px rgba(78, 222, 163, 0.2); }
+  .glow-secondary { box-shadow: inset 0 2px 10px rgba(255, 175, 211, 0.2); }
+  .glass-panel {
+    background: rgba(26, 26, 26, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--color-outline-variant);
   }
 
   /* Material Symbols icon font */
@@ -216,10 +262,12 @@
   }
   .dm-lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(29, 27, 23, 0.08);
+    box-shadow: 0 10px 28px -8px rgba(0, 0, 0, 0.55);
+    border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
   }
   .dm-lift:active {
     transform: translateY(-1px);
+    transition-duration: 0.08s;
   }
 
   /* Soft press feedback for clickable rows that shouldn't lift */

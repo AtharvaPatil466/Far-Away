@@ -1,6 +1,8 @@
-import { ArrowLeft, Download, Mail, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, Check, Download, Mail, ShieldCheck } from 'lucide-react'
 import type { ReportSection } from '../lib/anthropic'
 import type { Incident } from '../lib/incidents'
+import { downloadReportPdf, sendReportToNdma } from '../lib/reportExport'
 import DecisionChart from './DecisionChart'
 import OutcomesChart from './OutcomesChart'
 import SectionRenderer from './SectionRenderer'
@@ -50,6 +52,22 @@ export default function ReportViewer({
   sections,
   onNewReport,
 }: ReportViewerProps) {
+  const [sentToNdma, setSentToNdma] = useState(false)
+
+  const reportData = { incident, audience, generatedAt, sections }
+  const canExport = !isLoading && sections.length > 0
+
+  const handleDownloadPdf = () => {
+    if (canExport) downloadReportPdf(reportData)
+  }
+
+  const handleSendToNdma = () => {
+    if (!canExport) return
+    sendReportToNdma(reportData)
+    setSentToNdma(true)
+    window.setTimeout(() => setSentToNdma(false), 4000)
+  }
+
   return (
     <main className="viewer-page">
       <header className="report-header">
@@ -94,13 +112,13 @@ export default function ReportViewer({
       </article>
 
       <nav className="action-bar" aria-label="Report actions">
-        <button type="button">
+        <button type="button" onClick={handleDownloadPdf} disabled={!canExport}>
           <Download size={18} />
           DOWNLOAD PDF
         </button>
-        <button type="button">
-          <Mail size={18} />
-          SEND TO NDMA
+        <button type="button" onClick={handleSendToNdma} disabled={!canExport}>
+          {sentToNdma ? <Check size={18} /> : <Mail size={18} />}
+          {sentToNdma ? 'DISPATCHED TO NDMA' : 'SEND TO NDMA'}
         </button>
         <button onClick={onNewReport} type="button">
           <ArrowLeft size={18} />

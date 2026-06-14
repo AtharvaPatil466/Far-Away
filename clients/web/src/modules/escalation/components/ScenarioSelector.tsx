@@ -7,7 +7,7 @@ type ScenarioSelectorProps = {
 
 export function ScenarioSelector({ onSelect }: ScenarioSelectorProps) {
   return (
-    <section className="selector-view">
+    <section className="selector-view dm-reveal">
       <div className="system-kicker">
         <RadioTower size={18} />
         CLAUDE-LINKED DECISION GATEWAY
@@ -17,7 +17,7 @@ export function ScenarioSelector({ onSelect }: ScenarioSelectorProps) {
         <p>Select a scenario to generate an escalation memo</p>
       </header>
 
-      <div className="scenario-stack" aria-label="Escalation scenarios">
+      <div className="scenario-stack dm-stagger" aria-label="Escalation scenarios">
         {scenarios.map((scenario, index) => (
           <button className="scenario-button" type="button" key={scenario.id} onClick={() => onSelect(scenario)}>
             <span className="scenario-index">{String(index + 1).padStart(2, '0')}</span>

@@ -28,8 +28,8 @@ const PRIORITY_META: Record<
   { label: string; border: string; text: string }
 > = {
   CRITICAL: { label: 'Priority 1', border: 'border-l-error', text: 'text-error' },
-  HIGH: { label: 'Priority 2', border: 'border-l-on-tertiary-container', text: 'text-on-tertiary-container' },
-  MEDIUM: { label: 'Priority 3', border: 'border-l-secondary', text: 'text-secondary' },
+  HIGH: { label: 'Priority 2', border: 'border-l-secondary', text: 'text-secondary' },
+  MEDIUM: { label: 'Priority 3', border: 'border-l-tertiary', text: 'text-tertiary' },
 }
 
 const TRIGGER_ICON: Record<string, string> = {
@@ -299,7 +299,7 @@ export function Dashboard() {
           <Card className="flex flex-col overflow-hidden p-0 lg:col-span-4">
             <CardHeader>
               <CardTitle>Escalation Queue</CardTitle>
-              <Badge variant="solid">{criticalCount} Critical</Badge>
+              <Badge variant="critical">{criticalCount} Critical</Badge>
             </CardHeader>
             <div className="dm-scroll flex flex-1 flex-col gap-2 overflow-y-auto p-3">
               {pending.length === 0 ? (

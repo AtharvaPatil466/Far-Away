@@ -10,10 +10,10 @@ const badgeVariants = cva(
         neutral:
           'bg-surface-container-highest text-secondary border-transparent',
         critical: 'bg-error/10 text-error border-error/20',
-        warning: 'bg-on-tertiary-container/10 text-on-tertiary-container border-on-tertiary-container/20',
+        warning: 'bg-warning/15 text-warning border-warning/25',
         success: 'bg-success/10 text-success border-success/25',
         outline: 'bg-surface text-on-surface-variant border-outline-variant/40',
-        solid: 'bg-tertiary-container text-on-tertiary border-transparent',
+        solid: 'bg-primary text-on-primary border-transparent',
       },
     },
     defaultVariants: {

@@ -24,7 +24,7 @@ export default function ReportConfig({
 }: ReportConfigProps) {
   return (
     <main className="config-page">
-      <div className="config-wrap">
+      <div className="config-wrap dm-stagger">
         <div className="title-block">
           <p className="kicker">POST-INCIDENT REPORT GENERATOR</p>
           <h1>Generate Incident Report</h1>

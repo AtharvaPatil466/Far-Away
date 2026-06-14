@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import maplibregl from 'maplibre-gl'
+import { Map as MapIcon } from 'lucide-react'
 import { SYNTHETIC_MAP_STATE, ODISHA_SHELTERS, IMD_ALERTS } from '../../../lib/mapTypes'
 import type { MapState, GpsReading, Shelter } from '../../../lib/mapTypes'
 
@@ -38,6 +39,7 @@ export function LiveMap({ mapState, liveShelters, className }: LiveMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null)
   const markersRef = useRef<Record<string, maplibregl.Marker>>({})
   const [mapReady, setMapReady] = useState(false)
+  const [glFailed, setGlFailed] = useState(false)
 
   const state = mapState ?? SYNTHETIC_MAP_STATE
 
@@ -45,13 +47,31 @@ export function LiveMap({ mapState, liveShelters, className }: LiveMapProps) {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-      center: [85.8312, 19.8135], // [lon, lat] — Puri, Odisha
-      zoom: 7,
-      attributionControl: false,
-    })
+    // MapLibre needs WebGL. On machines where it's unavailable (headless
+    // browsers, GPU-blocklisted/older hardware, some VMs and remote desktops)
+    // the constructor throws synchronously — which, uncaught, would unmount
+    // the whole console via the app-level error boundary. Fail soft instead:
+    // flag it and render the static fallback below.
+    const supported = (maplibregl as unknown as { supported?: () => boolean }).supported
+    if (typeof supported === 'function' && !supported()) {
+      setGlFailed(true)
+      return
+    }
+
+    let map: maplibregl.Map
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+        center: [85.8312, 19.8135], // [lon, lat] — Puri, Odisha
+        zoom: 7,
+        attributionControl: false,
+      })
+    } catch (err) {
+      console.error('[LiveMap] WebGL map init failed; using static fallback:', err)
+      setGlFailed(true)
+      return
+    }
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right')
     map.addControl(
@@ -398,6 +418,36 @@ export function LiveMap({ mapState, liveShelters, className }: LiveMapProps) {
       }
     })
   }, [mapReady, state])
+
+  if (glFailed) {
+    return (
+      <div
+        className={className}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          padding: 24,
+          textAlign: 'center',
+          background:
+            'repeating-linear-gradient(45deg, rgba(127,127,127,0.05) 0, rgba(127,127,127,0.05) 1px, transparent 1px, transparent 12px)',
+        }}
+        role="img"
+        aria-label="Live operations map unavailable — WebGL not supported"
+      >
+        <MapIcon size={28} style={{ opacity: 0.45 }} />
+        <div style={{ fontWeight: 600, fontSize: 14 }}>Map view unavailable</div>
+        <div style={{ fontSize: 12, opacity: 0.65, maxWidth: 320, lineHeight: 1.5 }}>
+          The live map needs WebGL, which this browser or device doesn’t support.
+          All other telemetry and controls remain fully operational.
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div

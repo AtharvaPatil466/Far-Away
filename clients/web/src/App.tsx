@@ -10,9 +10,19 @@ import { CommandShell } from './shell/CommandShell'
 import type { UnifiedModuleKey } from './shell/TopNav'
 import { OfflineBanner } from './components/OfflineBanner'
 
+const MODULE_KEYS: UnifiedModuleKey[] = ['dashboard', 'escalation', 'report', 'evidence', 'field']
+
+function initialModule(isMobile: boolean): UnifiedModuleKey {
+  const param = new URLSearchParams(window.location.search).get('m')
+  if (param && (MODULE_KEYS as string[]).includes(param)) {
+    return param as UnifiedModuleKey
+  }
+  return isMobile ? 'field' : 'dashboard'
+}
+
 function App() {
   const isMobile = useIsMobile()
-  const [activeModule, setActiveModule] = useState<UnifiedModuleKey>(isMobile ? 'field' : 'dashboard')
+  const [activeModule, setActiveModule] = useState<UnifiedModuleKey>(() => initialModule(isMobile))
   const [bootState, setBootState] = useState<'splash' | 'transition' | 'ready'>('splash')
 
   useEffect(() => {
