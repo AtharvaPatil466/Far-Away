@@ -92,6 +92,34 @@ jobs:
       - name: make reproduce
         run: python tools/reproduce.py
 
+  backends:
+    name: backends (xgboost vs logistic bake-off)
+    runs-on: ubuntu-latest
+    # Install the optional [ml] extra and re-run the backend comparison, asserting
+    # the XGBoost column still reproduces docs/backend_comparison_golden.json within
+    # tolerance. This keeps the "XGBoost" claim in the architecture diagram an
+    # evidence-backed, continuously-verified measurement — not an aspirational label.
+    # XGBoost is not bit-reproducible across builds, so the gate uses a tolerance
+    # band (not Δ=0); the stdlib logistic headline keeps its exact gate in `reproduce`.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install (with the optional [ml] extra)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[ml]
+
+      - name: compare backends (tolerance-gated)
+        run: python tools/compare_backends.py
+
   lint:
     name: lint (ruff)
     runs-on: ubuntu-latest

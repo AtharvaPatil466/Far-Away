@@ -117,6 +117,17 @@ The earthquake module **does not beat** the GMPE baseline on the damage label �
 ties it (p = 0.64). Its reported advantage is on the *felt-report* label versus
 PAGER. This is stated as a tie, not dressed as a win (see §6).
 
+> _The **Model AUC** column is the deterministic, stdlib-only baseline (the
+> fixed-seed logistic fit with calibration, per the abstract) — exactly what
+> `make reproduce` regenerates. The optional **XGBoost** backend did not produce
+> these numbers, but its skill on the identical splits **is** measured by
+> `make compare-backends` (earthquake AUC 0.937 → 0.950; flood a wash; fire no
+> gain — see [`backend_comparison_golden.json`](backend_comparison_golden.json)),
+> so the baseline ships as the default. The physics models (HAZUS+Poisson,
+> Omori-Utsu, cellular automata) are validated against literature invariants in
+> `tests/test_physics_validation.py`. There is no U-Net / spatial-CNN flood
+> model; flood risk is tabular only._
+
 ### 4.2 Decision quality at the dispatch threshold (target POD = 0.90)
 
 | Hazard | POD | FAR | CSI | Bias |
