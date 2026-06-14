@@ -204,4 +204,71 @@
   .dm-scroll::-webkit-scrollbar-thumb:hover {
     background: var(--color-outline);
   }
+
+  /* ----------------------------------------------------------------------
+   * Micro-interactions — subtle, restrained. Hover lift, section reveals,
+   * responsive press feedback. All disabled under prefers-reduced-motion.
+   * -------------------------------------------------------------------- */
+
+  /* Gentle hover lift for cards / interactive surfaces */
+  .dm-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+  .dm-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(29, 27, 23, 0.08);
+  }
+  .dm-lift:active {
+    transform: translateY(-1px);
+  }
+
+  /* Soft press feedback for clickable rows that shouldn't lift */
+  .dm-press {
+    transition: background-color 0.15s ease, transform 0.12s ease;
+  }
+  .dm-press:active {
+    transform: scale(0.995);
+  }
+
+  /* Section reveal — fade + small rise on mount */
+  @keyframes dm-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .dm-reveal {
+    animation: dm-reveal 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  /* Staggered reveal for direct children (dashboard sections, lists) */
+  .dm-stagger > * {
+    animation: dm-reveal 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+  .dm-stagger > *:nth-child(1) { animation-delay: 0.02s; }
+  .dm-stagger > *:nth-child(2) { animation-delay: 0.08s; }
+  .dm-stagger > *:nth-child(3) { animation-delay: 0.14s; }
+  .dm-stagger > *:nth-child(4) { animation-delay: 0.2s; }
+  .dm-stagger > *:nth-child(5) { animation-delay: 0.26s; }
+  .dm-stagger > *:nth-child(6) { animation-delay: 0.32s; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dm-reveal,
+  .dm-stagger > * {
+    animation: none !important;
+  }
+  .dm-lift,
+  .dm-press {
+    transition: none !important;
+  }
+  .dm-lift:hover,
+  .dm-lift:active,
+  .dm-press:active {
+    transform: none !important;
+  }
 }

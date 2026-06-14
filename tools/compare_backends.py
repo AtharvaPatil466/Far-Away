@@ -83,8 +83,7 @@ def _headline_split(spec):
 
 def _calibrated_metrics(y_cal, p_cal_raw, yte, p_te_raw):
     """Apply the headline isotonic calibration, then score AUC/Brier/ECE on test."""
-    from disastermind.ml.validation.run import _metrics
-    from disastermind.ml.validation.run import fit_isotonic
+    from disastermind.ml.validation.run import _metrics, fit_isotonic
 
     iso = fit_isotonic(y_cal, p_cal_raw)
     p_te = iso.transform(p_te_raw)
