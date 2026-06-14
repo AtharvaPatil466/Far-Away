@@ -25,8 +25,8 @@ from .base import (
     _as_latlon,
     _clamp01,
     _extract_event,
-    _logistic,
     _offset_latlon,
+    collapse_probability,
 )
 
 
@@ -216,8 +216,9 @@ class EarthquakeImpactAgent(_PredictionAgent):
             if base_override is not None:
                 collapse = _clamp01(float(base_override(dist_km, construction)))
             else:
-                # Logistic fragility: P(collapse) = sigmoid(slope*(MMI - threshold)).
-                collapse = _clamp01(_logistic(frag["slope"] * 8.0 * (mmi - frag["mmi_threshold"]) / 4.0))
+                # Logistic fragility centred on the class threshold (single source
+                # of truth + literature invariants: base.collapse_probability).
+                collapse = collapse_probability(mmi, construction)
             if peak_for_shap is None or collapse > peak_for_shap[0]:
                 peak_for_shap = (collapse, dist_km, construction)
             # Poisson mean trapped = occupants * collapse * entrapment factor.

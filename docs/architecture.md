@@ -42,9 +42,30 @@ non-`None` result flips `disaster_active`.
 
 | Module | Enum | Hazard | Activates when (`triggers.py`) | Prediction model (`tier2/prediction/agents.py`) |
 |--------|------|--------|--------------------------------|--------------------------------------------------|
-| **A** | `CYCLONE_FLOOD = "A"` | Cyclone / Flood | IMD cyclonic-storm/deep-depression alert, **or** river gauge ≥ 75% of danger level, **or** dam-discharge ordered, **or** waterlogging breach in ≥ 3 zones (activates ~72 h before projected landfall) | `CyclonePredictionAgent` — XGBoost (tabular) + U-Net CNN (inundation raster) ensemble; deterministic per-100 m-cell inundation heuristic fallback |
+| **A** | `CYCLONE_FLOOD = "A"` | Cyclone / Flood | IMD cyclonic-storm/deep-depression alert, **or** river gauge ≥ 75% of danger level, **or** dam-discharge ordered, **or** waterlogging breach in ≥ 3 zones (activates ~72 h before projected landfall) | `CyclonePredictionAgent` — gradient-boosted (XGBoost) tabular model over hydro-met drivers; deterministic per-100 m-cell inundation heuristic fallback (the validated default; tabular only — no spatial CNN) |
 | **B** | `EARTHQUAKE = "B"` | Earthquake | Max seismic magnitude ≥ M4.5 (USGS / NCS) — activates within 90 s of detection | `EarthquakeImpactAgent` — HAZUS-style fragility curves per building class (kutcha/pucca/RCC) + Poisson casualty model; ShakeMap-MMI → fragility heuristic fallback |
 | **C** | `FIRE_COLLAPSE = "C"` | Urban Fire / Collapse | ≥ 3 brigade calls / zone / 10 min, **or** IoT smoke-heat cluster, **or** NASA FIRMS thermal anomaly, **or** social-NLP collapse cluster (activates immediately on breach) | `FireSpreadAgent` — cellular-automata fire-spread model; deterministic heuristic fallback |
+
+> **What backs each model claim (read before the metrics).** Each method above
+> carries an evidence tier:
+>
+> - **Logistic risk baseline** (A/B/C) — ✅ *validated*: the published headline
+>   AUC/Brier/ECE, regenerated to **Δ = 0** by `make reproduce` from real fixtures.
+>   The deterministic, stdlib-only default with zero optional dependencies.
+> - **Gradient-boosted (XGBoost, A/B)** — ✅ *validated, optional*: `make
+>   compare-backends` scores it on the *identical* splits
+>   ([`backend_comparison_golden.json`](backend_comparison_golden.json),
+>   CI tolerance-gated). It lifts earthquakes (+0.013 AUC), ties on flood, and does
+>   not beat the baseline on fire — so the baseline ships as default. Needs `.[ml]`.
+> - **HAZUS+Poisson, Omori-Utsu, cellular-automata** — 🔬 *implemented physics*:
+>   analytic models checked against published invariants (EMS-98 fragility
+>   ordering, Gutenberg-Richter decade scaling, Rothermel/Van Wagner spread) in
+>   [`tests/test_physics_validation.py`](../tests/test_physics_validation.py).
+>
+> There is **no U-Net / spatial-CNN flood model** — flood risk is tabular only; an
+> earlier draft named one that was never built and the claim has been removed. Each
+> optional backend lazily imports its library inside a `try/except` and falls back
+> to the validated baseline when absent.
 
 `Module.ALL = "ALL"` is the default scope for cross-cutting messages.
 

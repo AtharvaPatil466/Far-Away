@@ -28,7 +28,7 @@ SBOM        ?= sbom.json
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev test lint typecheck typecheck-advisory reproduce demo review-packet \
+.PHONY: help install dev test lint typecheck typecheck-advisory reproduce compare-backends demo review-packet \
         shadow-tick shadow-score shadow-verify run simulate verify-audit \
         compose-up compose-down docker-build docker-run deploy-check sbom clean
 
@@ -70,6 +70,9 @@ typecheck-advisory: ## Run mypy over the whole tree (advisory; reports the gradu
 
 reproduce: ## Regenerate every published validation number from raw fixtures and diff (offline).
 	$(PYTHON) tools/reproduce.py
+
+compare-backends: ## Bake-off the optional XGBoost backend vs the stdlib logistic headline (needs .[ml]).
+	$(PYTHON) tools/compare_backends.py
 
 demo: ## Narrated command walkthrough of a real cyclone: `make demo STORM=fani|amphan`.
 	$(PYTHON) -m disastermind.hindcast.walkthrough --storm $(or $(STORM),fani)

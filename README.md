@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/ci.yml/badge.svg)](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/ci.yml)
 [![shadow season](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/shadow-season.yml/badge.svg)](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/shadow-season.yml)
-![Tests](https://img.shields.io/badge/tests-1092%20py%20%2B%2017%20web-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1109%20py%20%2B%2017%20web-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)
 ![Typecheck](https://img.shields.io/badge/mypy-core%20gated-blue)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
@@ -41,9 +41,9 @@ India-focused (IMD / CWC / NCS / ISRO Bhuvan feeds) across three hazard modules:
                        RAW_FEED  │                        │ IOT_TELEMETRY
                                  ▼                        ▼
                          ┌──────────────────────────────────────────────┐
- TIER 2 (specialist,     │  prediction  A cyclone/flood (XGBoost+U-Net)   │
- autonomous decisions)   │              B quake impact (HAZUS+Poisson)     │
-                         │              C fire spread (cellular automata)  │
+ TIER 2 (specialist,     │  prediction  A cyclone/flood  gradient-boosted │
+ autonomous decisions)   │              B quake impact   HAZUS + Poisson  │
+                         │              C fire spread    cellular automata│
                          │                  │ PREDICTION                   │
                          │                  ▼                              │
                          │  cascade     flood-cascade · Omori-Utsu         │
@@ -80,11 +80,31 @@ Agents never call each other directly — they communicate only via **topics** o
 `MessageBus` (see `core/contracts.py::Topic`). This is what makes the system
 degrade gracefully and lets any agent be swapped or scaled independently.
 
+### What each model claim is backed by
+
+Every method named in the diagram carries its **evidence tier** — so nothing is
+asserted that isn't reproducibly checked. Read this before the metrics table.
+
+| Method (module) | Tier | What backs the claim |
+|---|---|---|
+| **Logistic risk baseline** (A/B/C) | ✅ **Validated** | The published headline AUC/Brier/ECE. Deterministic, stdlib-only, fixed-seed; `make reproduce` regenerates every number to **Δ = 0** from real fixtures. This is the model the metrics describe. |
+| **Gradient-boosted** (XGBoost, A/B) | ✅ **Validated, optional** | `make compare-backends` fits XGBoost on the *identical* splits and scores it against the baseline ([`docs/backend_comparison_golden.json`](docs/backend_comparison_golden.json), tolerance-gated in CI). A real lift on earthquakes (+0.013 AUC), a wash on flood, *no gain* on fire — so the baseline ships as default. Needs `pip install -e .[ml]`. |
+| **HAZUS + Poisson** (quake impact) | 🔬 **Implemented physics** | Analytic fragility + casualty model, checked against EMS-98 / HAZUS invariants (collapse = 0.5 at class threshold, vulnerability ordering, intensity attenuation) in [`tests/test_physics_validation.py`](tests/test_physics_validation.py). |
+| **Omori-Utsu + G-R** (aftershocks) | 🔬 **Implemented physics** | Modified Omori law, checked against Utsu / Reasenberg-Jones productivity and the Gutenberg-Richter decade-per-magnitude law (same suite). |
+| **Cellular automata** (fire spread) | 🔬 **Implemented physics** | Rothermel wind-driven spread + Van Wagner elliptical perimeter, checked for wind/intensity monotonicity and downwind elongation (same suite). |
+
+There is **no deep-CNN flood model** — flood risk is the gradient-boosted/logistic
+model on tabular GloFAS-ERA5 features. (An earlier draft of this diagram named a
+"U-Net"; it was never implemented, and the claim has been removed.) Each optional
+backend lazily imports its library inside a `try/except` and falls back to the
+validated baseline when absent, so a clean checkout reproduces the published
+metrics exactly with zero optional dependencies.
+
 ## Quickstart
 
 ```bash
 # stdlib-only: no broker, solver, ML lib or network required
-python -m pytest -q                      # 1045 tests, all offline (stdlib only)
+python -m pytest -q                      # 1109 tests, all offline (stdlib only)
 
 python - <<'PY'                          # drive a synthetic disaster
 from disastermind.orchestration.build import build_system, should_activate, Signals
@@ -261,3 +281,13 @@ clients/web/   unified web console (Vite + React): Commander Dashboard, Escalati
 deploy/        k8s manifests + sql/schema.sql; Dockerfile, Makefile, CI
 tests/         unit + e2e + scenario + perf + integration (integration gated by DM_INTEGRATION)
 ```
+
+> **Deploy maturity — wired, not yet load-proven.** The `storage/`,
+> `integrations/`, `live/`, `runtime/`, and `deploy/` layers (PostGIS · TimescaleDB
+> · Elasticsearch · MinIO · Kafka, plus the Dockerfile / k8s / Railway configs)
+> are real code with contract-level tests, but those tests are **gated out of the
+> default CI** (`DM_INTEGRATION`) and run against ephemeral fixtures — **not** a
+> live broker or database under production load. Everything CI proves on every
+> push is the offline, stdlib-first core. Read these layers as *production-shaped
+> scaffolding with a documented turn-on path* ([`DEPLOY.md`](DEPLOY.md)), not as a
+> system already validated at runtime scale.

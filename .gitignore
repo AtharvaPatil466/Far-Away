@@ -38,3 +38,6 @@ htmlcov/
 
 # agent worktrees
 .claude/worktrees/
+
+# leftover git history-rewrite scratch (filter-branch / filter-repo)
+.git-rewrite/
