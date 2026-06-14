@@ -76,7 +76,8 @@ class DispatchRouter(BaseAgent):
             return [self.channels[key]]
         # alias a couple of common synonyms before falling back
         aliases = {"fcm": "push", "notification": "push", "sat": "iridium",
-                   "satellite": "iridium", "text": "sms", "broadcast": "cap"}
+                   "satellite": "iridium", "text": "sms", "broadcast": "cap",
+                   "wa": "whatsapp", "voice": "ivr", "call": "ivr", "phone": "ivr"}
         if aliases.get(key) in self.channels:
             return [self.channels[aliases[key]]]
         return []

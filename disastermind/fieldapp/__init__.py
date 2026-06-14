@@ -32,6 +32,7 @@ from .contracts import (
     SiteOverCapacityReport,
     TeamStatusUpdate,
 )
+from .http_client import HttpFieldClient
 
 __all__ = [
     "DeploymentOrderMsg",
@@ -39,6 +40,7 @@ __all__ = [
     "OrderAck",
     "SiteOverCapacityReport",
     "MockFieldClient",
+    "HttpFieldClient",
     "FIELDAPP_ACK",
     "attach_field_clients",
 ]

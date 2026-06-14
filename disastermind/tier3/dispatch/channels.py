@@ -5,6 +5,8 @@ notification orders that the Commander (Tier 1) publishes on ``Topic.DISPATCH``.
 Each channel knows how to physically deliver a message over one transport:
 
   * :class:`SmsChannel`        — Twilio / Airtel / BSNL SMS gateway.
+  * :class:`WhatsAppChannel`   — Twilio WhatsApp Business API (primary citizen reach).
+  * :class:`IvrChannel`        — automated voice call (TTS) for low-literacy / voice-first users.
   * :class:`FcmPushChannel`    — Firebase Cloud Messaging push to the field app.
   * :class:`IridiumChannel`    — Iridium satellite short-burst messaging for
                                  no-coverage zones.
@@ -285,6 +287,125 @@ class SmsChannel(Channel):
             self.name, "sent", recipients, provider="twilio",
             dry_run=False, detail=f"sent {len(recipients)} SMS",
             message_id=last_sid,
+        )
+
+
+# -------------------------------------------------------------------- WhatsApp
+def _whatsapp_addr(num: str) -> str:
+    """Normalise a recipient to Twilio's ``whatsapp:+<E164>`` address form."""
+    n = num.strip()
+    return n if n.startswith("whatsapp:") else f"whatsapp:{n}"
+
+
+@dataclass
+class WhatsAppChannel(Channel):
+    """WhatsApp via the Twilio Business API (PRD Step 8, last-mile citizen reach).
+
+    WhatsApp is the dominant consumer messaging app in India, so it is a primary
+    citizen-alert channel where data coverage exists. Uses the same Twilio
+    credentials as :class:`SmsChannel`; addresses are prefixed ``whatsapp:`` and
+    delivery degrades to a recorded receipt when credentials/SDK are absent.
+    """
+
+    name: str = "whatsapp"
+
+    def build(self, payload: dict[str, Any]) -> dict[str, Any]:
+        body = str(payload.get("body", ""))
+        from_no = str(payload.get("from") or "")
+        return {
+            "transport": "whatsapp",
+            "to": [_whatsapp_addr(r) for r in _recipients(payload)],
+            "from": _whatsapp_addr(from_no) if from_no else "",
+            "text": body,
+        }
+
+    def _deliver(self, payload: dict[str, Any]) -> dict[str, Any]:
+        recipients = _recipients(payload)
+        body = str(payload.get("body", ""))
+        if self.transport is not None:
+            return self.transport(self.build(payload))
+        sid = self.settings.twilio_sid
+        token = self.settings.twilio_token
+        from_no = _whatsapp_addr(str(payload.get("from") or "")) if payload.get("from") else ""
+        if not (sid and token and from_no):
+            return _receipt(
+                self.name, "recorded", recipients, provider="twilio-whatsapp",
+                dry_run=False, detail="no twilio whatsapp credentials/sender; recorded only",
+            )
+        try:
+            from twilio.rest import Client  # type: ignore
+        except Exception as exc:
+            log.warning("twilio SDK absent (%s); recording whatsapp send", exc)
+            return _receipt(
+                self.name, "recorded", recipients, provider="twilio-whatsapp",
+                dry_run=False, detail=f"twilio sdk absent: {type(exc).__name__}",
+            )
+        client = Client(sid, token)
+        last_sid = None
+        for to in recipients:
+            msg = client.messages.create(body=body, from_=from_no, to=_whatsapp_addr(to))
+            last_sid = getattr(msg, "sid", None)
+        return _receipt(
+            self.name, "sent", recipients, provider="twilio-whatsapp",
+            dry_run=False, detail=f"sent {len(recipients)} WhatsApp", message_id=last_sid,
+        )
+
+
+# ----------------------------------------------------------------- IVR / voice
+@dataclass
+class IvrChannel(Channel):
+    """Automated voice call (IVR) via Twilio Programmable Voice (PRD Step 8).
+
+    The reach-of-last-resort for the population SMS misses — low-literacy and
+    voice-first users get the alert **read aloud** (TTS) over an ordinary phone
+    call. The spoken text is wrapped in TwiML ``<Say>`` with an optional language
+    (e.g. ``hi-IN``, ``or-IN``); record-only fallback when credentials are absent.
+    """
+
+    name: str = "ivr"
+
+    def build(self, payload: dict[str, Any]) -> dict[str, Any]:
+        body = str(payload.get("body", ""))
+        language = str(payload.get("language") or "en-IN")
+        twiml = f'<?xml version="1.0" encoding="UTF-8"?><Response><Say language="{escape(language)}">{escape(body)}</Say></Response>'
+        return {
+            "transport": "voice",
+            "to": _recipients(payload),
+            "from": str(payload.get("from") or ""),
+            "language": language,
+            "say": body,
+            "twiml": twiml,
+        }
+
+    def _deliver(self, payload: dict[str, Any]) -> dict[str, Any]:
+        recipients = _recipients(payload)
+        if self.transport is not None:
+            return self.transport(self.build(payload))
+        sid = self.settings.twilio_sid
+        token = self.settings.twilio_token
+        from_no = payload.get("from")
+        if not (sid and token and from_no):
+            return _receipt(
+                self.name, "recorded", recipients, provider="twilio-voice",
+                dry_run=False, detail="no twilio voice credentials/caller-id; recorded only",
+            )
+        try:
+            from twilio.rest import Client  # type: ignore
+        except Exception as exc:
+            log.warning("twilio SDK absent (%s); recording voice call", exc)
+            return _receipt(
+                self.name, "recorded", recipients, provider="twilio-voice",
+                dry_run=False, detail=f"twilio sdk absent: {type(exc).__name__}",
+            )
+        client = Client(sid, token)
+        twiml = self.build(payload)["twiml"]
+        last_sid = None
+        for to in recipients:
+            call = client.calls.create(twiml=twiml, from_=str(from_no), to=to)
+            last_sid = getattr(call, "sid", None)
+        return _receipt(
+            self.name, "sent", recipients, provider="twilio-voice",
+            dry_run=False, detail=f"placed {len(recipients)} voice calls", message_id=last_sid,
         )
 
 

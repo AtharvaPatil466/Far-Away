@@ -110,7 +110,9 @@ def test_dry_run_records_send_and_returns_receipt():
 def test_every_channel_dry_run_records_a_receipt():
     s = Settings()
     channels = build_channels(s, dry_run=True)
-    assert [c.name for c in channels] == ["sms", "push", "iridium", "cap", "radio"]
+    assert [c.name for c in channels] == [
+        "sms", "whatsapp", "ivr", "push", "iridium", "cap", "radio"
+    ]
     for ch in channels:
         r = ch.send({"recipients": ["dest"], "body": "hello", "title": "t"})
         assert r["status"] == "recorded"

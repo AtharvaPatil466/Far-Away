@@ -1,7 +1,8 @@
 """Tier 3 notification-dispatch module (PRD Step 8).
 
-Executes ``Topic.DISPATCH`` orders over SMS, FCM push, Iridium satellite, CAP
-emergency broadcast and a field-radio gateway. NO decision authority.
+Executes ``Topic.DISPATCH`` orders over SMS, WhatsApp, automated voice (IVR),
+FCM push, Iridium satellite, CAP emergency broadcast and a field-radio gateway.
+NO decision authority.
 """
 from __future__ import annotations
 
@@ -12,7 +13,9 @@ from .channels import (
     FcmPushChannel,
     FieldRadioChannel,
     IridiumChannel,
+    IvrChannel,
     SmsChannel,
+    WhatsAppChannel,
 )
 from .router import DispatchRouter
 
@@ -21,6 +24,8 @@ __all__ = [
     "build_channels",
     "Channel",
     "SmsChannel",
+    "WhatsAppChannel",
+    "IvrChannel",
     "FcmPushChannel",
     "IridiumChannel",
     "CapChannel",
