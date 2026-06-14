@@ -157,6 +157,9 @@ class IncidentReport:
     dispatch: DispatchSummary
     resources: ResourceUtilisation
     explainability: ExplainabilitySummary
+    #: Sphere-standard relief-commodity demand + supply gap (PRD Step 4/5),
+    #: derived from the peak population at risk. Empty when no population is known.
+    relief: dict[str, Any] = field(default_factory=dict)
 
     # -------------------------------------------------------------- rendering
     def to_dict(self) -> dict[str, Any]:
@@ -172,6 +175,7 @@ class IncidentReport:
             "dispatch": asdict(self.dispatch),
             "resources": asdict(self.resources),
             "explainability": asdict(self.explainability),
+            "relief": dict(self.relief),
         }
 
     def to_markdown(self) -> str:
@@ -271,6 +275,23 @@ class IncidentReport:
                 L.append(f"  - **{model}** (top driver: {top}): {ranked}")
         L.append("")
 
+        # --- Relief demand (Sphere standard) -------------------------------
+        if self.relief:
+            d = self.relief.get("demand", {})
+            L.append("## Relief Demand (Sphere standard)")
+            L.append("")
+            L.append(
+                f"- Displaced caseload: **{self.relief.get('displaced', 0):,}** "
+                f"({self.relief.get('displacement_fraction', 0):.0%} of "
+                f"{self.relief.get('population_at_risk', 0):,} at risk), "
+                f"{self.relief.get('horizon_days', 0)}-day horizon"
+            )
+            L.append(f"- Water: **{d.get('water_litres', 0):,.0f} L** (15 L/person/day)")
+            L.append(f"- Food: **{d.get('ration_kg', 0):,.0f} kg** dry ration (2,100 kcal/person/day)")
+            L.append(f"- Shelter: **{d.get('shelter_spaces', 0):,} spaces** / {d.get('shelter_m2', 0):,.0f} m²")
+            L.append(f"- Medical beds: **{d.get('medical_beds', 0):,}**; latrines: {d.get('latrines', 0):,}; water points: {d.get('water_points', 0):,}")
+            L.append("")
+
         # --- Timeline ------------------------------------------------------
         L.append("## Timeline")
         L.append("")
@@ -321,6 +342,7 @@ class IncidentReporter:
         dispatch = self._build_dispatch(messages)
         resources = self._build_resources(messages)
         explainability = self._build_explainability(records)
+        relief = self._build_relief(resources)
 
         window = {
             "start": timeline[0].timestamp if timeline else None,
@@ -337,7 +359,30 @@ class IncidentReporter:
             dispatch=dispatch,
             resources=resources,
             explainability=explainability,
+            relief=relief,
         )
+
+    def _build_relief(self, resources: ResourceUtilisation, *, horizon_days: int = 7) -> dict[str, Any]:
+        """Project Sphere-standard relief demand from the peak population at risk.
+
+        Surfaces the relief-commodity forecaster (:mod:`..tier2.resource.demand`)
+        in the after-action report: how much water/food/shelter/medical/sanitation
+        a ``horizon_days`` relief operation must sustain for the displaced caseload.
+        Empty when no population at risk was observed.
+        """
+        if resources.population_at_risk <= 0:
+            return {}
+        from ..tier2.resource import demand as _dm
+
+        displaced = int(round(resources.population_at_risk * _dm.DEFAULT_DISPLACEMENT_FRACTION))
+        forecast = _dm.forecast_demand(displaced, horizon_days)
+        return {
+            "displaced": displaced,
+            "horizon_days": horizon_days,
+            "population_at_risk": resources.population_at_risk,
+            "displacement_fraction": _dm.DEFAULT_DISPLACEMENT_FRACTION,
+            "demand": forecast.to_dict(),
+        }
 
     # convenience wrappers ---------------------------------------------------
     def to_dict(self, incident_id: str | None = None) -> dict[str, Any]:
