@@ -19,11 +19,11 @@ from ....models.domain import (
 from ....models.geo import LatLon
 from .base import (
     FIRE_HORIZONS_MIN,
-    _PredictionAgent,
     _as_latlon,
     _clamp01,
     _extract_event,
     _offset_latlon,
+    _PredictionAgent,
     rate_of_spread,
 )
 

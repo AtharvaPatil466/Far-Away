@@ -42,12 +42,12 @@ from .base import (
     FIRE_HORIZONS_MIN,
     FLOOD_HORIZONS_MIN,
     FRAGILITY,
-    _PredictionAgent,
     _as_latlon,
     _clamp01,
     _extract_event,
     _logistic,
     _offset_latlon,
+    _PredictionAgent,
     _shap_features,
 )
 from .cyclone import CyclonePredictionAgent, meta_population

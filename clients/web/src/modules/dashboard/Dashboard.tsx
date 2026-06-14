@@ -67,7 +67,7 @@ function KpiCard({ label, value, icon, hint, hintIcon, tone = 'default' }: KpiPr
   return (
     <Card
       className={cn(
-        'flex flex-col justify-between p-4',
+        'dm-lift flex flex-col justify-between p-4',
         critical && 'border-error/20 bg-error-container/30',
       )}
     >
@@ -118,7 +118,7 @@ function QueueItem({ item, now, onDispatch, onAcknowledge }: QueueItemProps) {
   return (
     <div
       className={cn(
-        'cursor-pointer rounded border border-l-4 border-outline-variant/30 bg-surface p-3 transition-colors hover:bg-surface-container-highest',
+        'dm-press cursor-pointer rounded border border-l-4 border-outline-variant/30 bg-surface p-3 hover:bg-surface-container-highest',
         meta.border,
       )}
     >
@@ -228,7 +228,7 @@ export function Dashboard() {
 
   return (
     <div className="dm-scroll h-full overflow-y-auto bg-surface p-gutter md:p-margin-desktop">
-      <div className="mx-auto flex h-full max-w-[1440px] flex-col gap-6">
+      <div className="dm-stagger mx-auto flex h-full max-w-[1440px] flex-col gap-6">
         {/* Header */}
         <div className="flex shrink-0 flex-col justify-between gap-3 md:flex-row md:items-end">
           <div>
