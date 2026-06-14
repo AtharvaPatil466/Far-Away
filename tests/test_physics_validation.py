@@ -54,7 +54,7 @@ class TestFragilityCurve:
 
     def test_probabilities_bounded(self) -> None:
         for cls in (*self.CLASSES, "unknown", "nonsense-class"):
-            for mmi in range(0, 13):
+            for mmi in range(13):
                 assert 0.0 <= collapse_probability(float(mmi), cls) <= 1.0
 
     def test_intensity_attenuates_with_distance(self) -> None:
@@ -76,7 +76,7 @@ class TestOmoriAftershocks:
         # Utsu (1961): aftershock rate n(t)=K/(t+c)^p decays with time. Counts in
         # successive equal windows must strictly decrease.
         p = omori.fit_params(6.5)
-        windows = [(i, i + 1) for i in range(0, 10)]
+        windows = [(i, i + 1) for i in range(10)]
         counts = [omori.expected_count(p, a, b) for a, b in windows]
         assert all(b < a for a, b in zip(counts, counts[1:], strict=False))
 

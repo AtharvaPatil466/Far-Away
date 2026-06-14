@@ -118,7 +118,7 @@ def calibrate(
     n = len(records)
     sx, sy = sum(xs), sum(ys)
     sxx = sum(x * x for x in xs)
-    sxy = sum(x * y for x, y in zip(xs, ys))
+    sxy = sum(x * y for x, y in zip(xs, ys, strict=False))
     denom = n * sxx - sx * sx
     if abs(denom) < 1e-9:
         # All records share the same egress-scaled demand: can't separate the two
