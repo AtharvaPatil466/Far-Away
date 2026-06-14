@@ -57,6 +57,33 @@ def _logistic(x: float) -> float:
     return z / (1.0 + z)
 
 
+def collapse_probability(mmi: float, construction: str) -> float:
+    """HAZUS-style structural collapse probability P(collapse | MMI, class).
+
+    Single source of truth for the fragility curve used by the earthquake impact
+    assessor (Module B). A logistic fragility centred on each construction class's
+    threshold intensity: P = 0.5 exactly at ``mmi_threshold``, rising with shaking.
+    The class ordering kutcha < pucca < RCC follows the standard EMS-98 / HAZUS
+    vulnerability ranking (unreinforced/mud most fragile, reinforced concrete
+    least). See ``tests/test_physics_validation.py`` for the literature-invariant
+    checks this must satisfy.
+    """
+    frag = FRAGILITY.get(construction.lower(), FRAGILITY["unknown"])
+    return _clamp01(_logistic(frag["slope"] * 8.0 * (mmi - frag["mmi_threshold"]) / 4.0))
+
+
+def rate_of_spread(intensity: float, wind_speed: float) -> float:
+    """Cellular-automata fire base rate-of-spread in metres/minute (Module C).
+
+    Single source of truth for the fire-front spread rate. Monotonically
+    increasing in both fire intensity and wind speed, consistent with the
+    wind-driven surface-fire behaviour of the Rothermel (1972) spread model; the
+    perimeter is grown as a downwind-elongated ellipse (Van Wagner 1969). See
+    ``tests/test_physics_validation.py`` for the invariant checks.
+    """
+    return 4.0 + 6.0 * _clamp01(intensity / 3.0) + 1.5 * wind_speed
+
+
 def _as_latlon(obj: Any, default: LatLon | None = None) -> LatLon:
     """Coerce a dict / LatLon / [lat, lon] into a :class:`LatLon`."""
     if isinstance(obj, LatLon):

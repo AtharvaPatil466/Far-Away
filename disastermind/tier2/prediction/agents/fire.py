@@ -24,6 +24,7 @@ from .base import (
     _clamp01,
     _extract_event,
     _offset_latlon,
+    rate_of_spread,
 )
 
 
@@ -184,8 +185,9 @@ class FireSpreadAgent(_PredictionAgent):
         rate-of-spread so the perimeter reflects the trained model, while the
         elliptical spreading geometry below is shared verbatim by both paths.
         """
-        # Base rate-of-spread in metres/minute, scaled by intensity and wind.
-        base_ros = 4.0 + 6.0 * _clamp01(intensity / 3.0) + 1.5 * wind_speed
+        # Base rate-of-spread in metres/minute, scaled by intensity and wind
+        # (single source of truth + literature invariants: base.rate_of_spread).
+        base_ros = rate_of_spread(intensity, wind_speed)
         if base_override is not None:
             # Map a burn probability in [0, 1] to a multiplier around 1.0 so a
             # high-confidence model accelerates the projected perimeter.

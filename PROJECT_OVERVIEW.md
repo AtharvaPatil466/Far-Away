@@ -19,7 +19,7 @@ surfaced through a browser command-and-control console.
 | **Hazards** | Cyclone/flood, earthquake (rapid impact assessment), urban/forest fire. |
 | **Differentiator** | Every model is validated on **real historical data**, leak-free, and shown to beat the operational baselines with statistical significance — not a demo on synthetic numbers. |
 | **Design stance** | Standard-library-first and degrades gracefully; explicitly *decision-support* (a human commander holds authority) with a tamper-evident audit trail. |
-| **Scale** | ~37,500 lines of Python across 34 subsystems, a Vite + React 19 + TypeScript console (67 source modules), and a test suite of ~1,030 offline, deterministic tests. |
+| **Scale** | ~39,000 lines of Python across 34 subsystems, a Vite + React 19 + TypeScript console (74 source modules), and a suite of ~1,110 offline, deterministic Python tests alongside a Vitest console suite. |
 
 ---
 
@@ -41,11 +41,11 @@ DisasterMind is a **three-tier multi-agent system** communicating over a single
 message bus. A hazard signal flows up the tiers and back down to dispatch:
 
 ```
- TIER 3 — SENSE            TIER 2 — THINK                          TIER 1 — DECIDE        TIER 3 — ACT
- ──────────────            ──────────────────────────────────     ────────────────       ───────────
- raw_feed         ──►      prediction ─► cascade ─► resource_plan ─► routing_plan ─►
- iot_telemetry                                                       field_order   ─►      commander_review
-                                                                                          escalation        ──► dispatch
+  Tier 3 · SENSE            Tier 2 · THINK                                       Tier 1 · DECIDE       Tier 3 · ACT
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  raw_feed                                                                       commander
+  iot_telemetry  ──►  prediction ─► cascade ─► resource_plan ─► routing_plan ─► field_order ─► review ──►  dispatch
+                                                                                                  └────►  escalation (human)
 ```
 
 - **Tier 3 (sensing & acting):** ingestion adapters for each hazard, IoT gateways,
@@ -85,9 +85,10 @@ drivers, each with explainable feature attributions (SHAP-style):
 - **Fire** — fire-weather (temperature, humidity, wind), drought/dryness streaks,
   seasonality → next-day ignition.
 
-Models are thin wrappers that prefer a trained gradient-boosted/logistic backend
-and fall back to a deterministic in-process model, always returning calibrated
-probabilities.
+Each model runs the validated, dependency-free calibrated baseline by default and
+will use a trained gradient-boosted backend when the optional ML extra is
+installed; either path returns calibrated probabilities, so the system behaves
+identically — only more accurately — as capabilities are added.
 
 ### 4.2 Cascading-effect modeling
 Beyond first-order risk, the platform models downstream consequences:
@@ -171,6 +172,12 @@ model on real, held-out data:
 - **Shadow mode** — an append-only, hash-chained journal that records live
   predictions before outcomes are known, scores a season against reality, and
   exports a complete record for independent review.
+- **Backend benchmark** — the optional gradient-boosted backend is scored against
+  the default baseline on identical splits and held to a snapshot in CI, so any
+  accuracy claim for it is a reproducible measurement.
+- **Physics-model validation** — the analytic models (HAZUS-style fragility,
+  Omori-Utsu aftershock decay, cellular-automata fire spread) are checked against
+  the published invariants of their source literature.
 
 ### 4.9 Historical hindcasting & backtesting
 - **Named-event replay** — Cyclone **Fani (2019)** and **Amphan (2020)** are
@@ -215,6 +222,18 @@ calibration split, never on the test set. See
 [`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) for the full evaluation
 including baseline-significance tables, worst-block generalisation, and a frank
 failure analysis; reproduce every number with `make reproduce`.
+
+> **Reproducibility and model design.** The figures below are produced by the
+> platform's default model — a deterministic, calibrated logistic fit that uses
+> only the standard library. Because it is fixed-seed and dependency-free,
+> `make reproduce` regenerates every published value exactly from the committed
+> fixtures (Δ = 0), so the table is a continuously verified artefact rather than a
+> static claim. An optional gradient-boosted backend (XGBoost) is benchmarked on
+> the identical splits and calibration by `make compare-backends`: it improves
+> earthquake ranking (AUC 0.937 → 0.950) and matches the baseline on flood and
+> fire, so it is offered as a hazard-specific, opt-in upgrade while the
+> dependency-free model remains the shipped default. Flood risk is modelled from
+> tabular hydro-meteorological drivers.
 
 | Hazard | Data source | Out-of-sample AUC | Brier | ECE | Actionable lead (POD ≥ 80%) |
 |---|---|---:|---:|---:|---|

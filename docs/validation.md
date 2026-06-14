@@ -12,6 +12,18 @@ python -m disastermind.ml.validation --hazard flood --fast
 python -m disastermind.ml.validation --json     # machine-readable report
 ```
 
+> **Which model these numbers describe.** Every metric in this document is from
+> the **deterministic, stdlib-only baseline** (a fixed-seed logistic fit with
+> calibration) — the same pipeline `make reproduce` regenerates from committed
+> fixtures with zero optional dependencies. The optional **XGBoost** backend is a
+> lazily-imported alternative, and its skill *is* measured — on the identical
+> splits — by `make compare-backends` (earthquake +0.013 AUC, flood a wash, fire
+> no gain; see [`backend_comparison_golden.json`](backend_comparison_golden.json)),
+> but it did **not** produce the numbers below. The physics models
+> (HAZUS+Poisson, Omori-Utsu, cellular automata) are validated separately against
+> literature invariants in [`tests/test_physics_validation.py`](../tests/test_physics_validation.py).
+> There is **no U-Net / spatial-CNN flood model**; flood risk is tabular only.
+
 ## 1. Real data only — all three hazards
 
 There is **no synthetic data anywhere in the production pipeline**: not in
