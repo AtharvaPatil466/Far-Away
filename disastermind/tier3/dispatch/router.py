@@ -82,16 +82,32 @@ class DispatchRouter(BaseAgent):
             return [self.channels[aliases[key]]]
         return []
 
+    #: citizen last-mile channels a public alert fans out to (beyond CAP) when
+    #: the operator didn't pin a specific channel — broadest reach by default.
+    _CITIZEN_REACH: tuple[str, ...] = ("sms", "whatsapp", "ivr")
+
     def _cap_targets(self, requested: Any, reasoning: list[str]) -> list[Channel]:
         """Resolve a public_alert order to its broadcast channels, CAP first.
 
         A public evacuation alert always goes out on CAP (the standards
-        emergency-broadcast envelope). The operator may additionally fan it out
-        (e.g. ``channel == "all"``); we honour that but guarantee the CAP channel
-        is present so the CAP 1.2 document is always rendered and recorded.
+        emergency-broadcast envelope) and, unless the operator pins a specific
+        channel, additionally fans out over the citizen last-mile channels
+        present (SMS, WhatsApp, automated voice/IVR) so the warning reaches people
+        who don't see a broadcast. An explicit ``channel`` request is honoured
+        verbatim (CAP still guaranteed); ``channel == "all"`` already hits every
+        channel via :meth:`_select`.
         """
         if requested in (None, "cap", "broadcast"):
             base: list[Channel] = []
+            # Default public alert -> add every configured citizen-reach channel.
+            for cname in self._CITIZEN_REACH:
+                if cname in self.channels:
+                    base.append(self.channels[cname])
+            if base:
+                reasoning.append(
+                    "public_alert: fanned out to citizen channels "
+                    + ", ".join(c.name for c in base)
+                )
         else:
             base = self._select(requested)
         if "cap" in self.channels and self.channels["cap"] not in base:
