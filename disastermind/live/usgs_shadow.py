@@ -146,7 +146,7 @@ def tick(journal: ShadowJournal, feed_url: str) -> int:
             probability=prob,
             threshold=OPERATING_THRESHOLD,
             features=dict(zip(("magnitude", "depth_km", "abs_latitude", "ocean_proxy",
-                              "gmpe_attenuation"), q.features())),
+                              "gmpe_attenuation"), q.features(), strict=False)),
             model_version=_MODEL_VERSION,
         )
         added += 1

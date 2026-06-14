@@ -25,9 +25,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from .registry import get_model
 from .shadow import ShadowJournal, export_for_review, score_season
@@ -40,7 +39,7 @@ _MODULE = {"cyclone": "A", "flood": "A", "earthquake": "B", "fire": "C"}
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _window_end(issued_at: str, hazard: str) -> str:
@@ -50,7 +49,8 @@ def _window_end(issued_at: str, hazard: str) -> str:
 
 def _cmd_tick(args: argparse.Namespace) -> int:
     """Journal one live prediction from a features file."""
-    feats = json.loads(open(args.features, encoding="utf-8").read())
+    with open(args.features, encoding="utf-8") as f:
+        feats = json.load(f)
     # Accept either a bare ordered list or a {name: value} mapping; the model's
     # feature order is the source of truth, so a mapping is sorted by key only as
     # a stable fallback — prefer an explicit ordered list from your adapter.
@@ -106,7 +106,8 @@ def _cmd_export(args: argparse.Namespace) -> int:
     packet = export_for_review(ShadowJournal(args.journal))
     text = json.dumps(packet, indent=2)
     if args.out:
-        open(args.out, "w", encoding="utf-8").write(text)
+        with open(args.out, "w", encoding="utf-8") as f:
+            f.write(text)
         print(f"wrote review packet -> {args.out}")
     else:
         print(text)
