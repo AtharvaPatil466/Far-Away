@@ -289,8 +289,6 @@ class CommanderAgent(BaseAgent):
         pending = self.pending.get(report_id)
         if pending is None or pending.status != "pending":
             return []
-        pending.status = "approved"
-        self.stats["approved"] += 1
         msg = self._build_dispatch(
             pending.order,
             pending.decision,
@@ -298,8 +296,11 @@ class CommanderAgent(BaseAgent):
             pending.module,
             via=f"human_approved:{approver}",
         )
+        audit_record = self.emit(msg)
+        msg.audit_record = audit_record
+        pending.status = "approved"
+        self.stats["approved"] += 1
         self.pending.pop(report_id, None)
-        self.emit(msg)
         return [msg]
 
     def reject(self, report_id: str, approver: str = "human", note: str = "") -> list[Message]:
@@ -307,8 +308,6 @@ class CommanderAgent(BaseAgent):
         pending = self.pending.get(report_id)
         if pending is None or pending.status != "pending":
             return []
-        pending.status = "rejected"
-        self.stats["rejected"] += 1
         ack = Message(
             sender=self.name,
             recipient="human_dashboard",
@@ -326,8 +325,11 @@ class CommanderAgent(BaseAgent):
                 "note": note,
             },
         )
+        audit_record = self.emit(ack)
+        ack.audit_record = audit_record
+        pending.status = "rejected"
+        self.stats["rejected"] += 1
         self.pending.pop(report_id, None)
-        self.emit(ack)
         return [ack]
 
     # ------------------------------------------------------------------ helpers
@@ -344,7 +346,12 @@ class CommanderAgent(BaseAgent):
                 "human_only": p.decision.human_only,
                 "deadline_epoch": p.deadline_epoch,
                 "status": p.status,
+                "priority": "CRITICAL",
                 "incident_id": p.incident_id,
+                "created_epoch": p.created_epoch,
+                "reasoning": list(p.reasoning),
+                "order": dict(p.order),
+                "summary": self._summary_for(p.order, p.decision),
             }
             for p in self.pending.values()
         ]

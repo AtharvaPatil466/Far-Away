@@ -4,14 +4,14 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded font-label-md text-label-md transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none active:scale-[0.97] [&_.material-symbols-outlined]:text-[18px]',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded font-mono text-label-md uppercase transition-[color,background-color,border-color] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 [&_.material-symbols-outlined]:text-[18px]',
   {
     variants: {
       variant: {
         default: 'bg-primary text-on-primary hover:bg-primary-fixed-dim',
         accent:
-          'bg-primary text-on-primary glow-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] hover:brightness-110',
-        destructive: 'bg-secondary-container text-on-secondary-container glow-secondary hover:brightness-110',
+          'bg-primary text-on-primary hover:bg-primary-fixed-dim',
+        destructive: 'border border-error bg-error-container text-error hover:bg-error/10',
         outline:
           'border border-outline-variant/60 bg-surface text-on-surface hover:bg-surface-container-high',
         secondary:
@@ -22,7 +22,7 @@ const buttonVariants = cva(
         default: 'h-9 px-4 py-2',
         sm: 'h-8 px-3',
         lg: 'h-10 px-6',
-        icon: 'h-10 w-10 rounded-full',
+        icon: 'h-10 w-10',
       },
     },
     defaultVariants: {

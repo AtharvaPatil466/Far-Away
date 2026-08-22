@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Activity, Radio, ScrollText, Scale, SlidersHorizontal, Wind } from 'lucide-react'
+import {
+  Activity, Database, Radio, ScrollText, Scale, ShieldCheck, SlidersHorizontal, Wind,
+} from 'lucide-react'
 import './evidence.css'
 import { CycloneBacktestMap } from './components/CycloneBacktestMap'
 import { FeedProvenance } from './components/FeedProvenance'
@@ -7,20 +9,25 @@ import { ShadowJournal } from './components/ShadowJournal'
 import { Resilience } from './components/Resilience'
 import { Limitations } from './components/Limitations'
 import { SensitivityChart } from './components/SensitivityChart'
+import { AuditIntegrity } from './components/AuditIntegrity'
+import { LiveEvidence } from './components/LiveEvidence'
 
-type EvidenceTab = 'cyclone' | 'feeds' | 'shadow' | 'resilience' | 'sensitivity' | 'limits'
+type EvidenceTab =
+  | 'live' | 'cyclone' | 'feeds' | 'shadow' | 'audit' | 'resilience' | 'sensitivity' | 'limits'
 
 const TABS: Array<{ id: EvidenceTab; label: string; Icon: typeof Wind }> = [
+  { id: 'live', label: 'LIVE EVIDENCE', Icon: Database },
   { id: 'cyclone', label: 'Cyclone Backtest', Icon: Wind },
   { id: 'feeds', label: 'Feed Status', Icon: Radio },
-  { id: 'shadow', label: 'Shadow Journal', Icon: ScrollText },
+  { id: 'shadow', label: 'Shadow Demo', Icon: ScrollText },
+  { id: 'audit', label: 'Audit Integrity', Icon: ShieldCheck },
   { id: 'resilience', label: 'Resilience', Icon: Activity },
   { id: 'sensitivity', label: 'Sensitivity', Icon: SlidersHorizontal },
   { id: 'limits', label: 'Limitations', Icon: Scale },
 ]
 
 export function Evidence() {
-  const [tab, setTab] = useState<EvidenceTab>('cyclone')
+  const [tab, setTab] = useState<EvidenceTab>('live')
 
   return (
     <div className="evidence-module">
@@ -41,9 +48,11 @@ export function Evidence() {
       </nav>
 
       <div className="evidence-content">
+        {tab === 'live' && <LiveEvidence />}
         {tab === 'cyclone' && <CycloneBacktestMap />}
         {tab === 'feeds' && <FeedProvenance />}
         {tab === 'shadow' && <ShadowJournal />}
+        {tab === 'audit' && <AuditIntegrity />}
         {tab === 'resilience' && <Resilience />}
         {tab === 'sensitivity' && <SensitivityChart />}
         {tab === 'limits' && <Limitations />}

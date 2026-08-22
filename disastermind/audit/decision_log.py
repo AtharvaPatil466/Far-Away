@@ -27,6 +27,10 @@ log = logging.getLogger("disastermind.audit")
 GENESIS = "0" * 64
 
 
+class AuditWriteError(RuntimeError):
+    """Raised when the authoritative local audit record cannot be appended."""
+
+
 class DecisionLogger:
     def __init__(self, path: str = "./audit.jsonl", elasticsearch_url: str = "") -> None:
         self.path = path
@@ -80,8 +84,8 @@ class DecisionLogger:
         body = json.dumps(rec, sort_keys=True, separators=(",", ":"))
         rec["_prev"] = self._prev_hash
         rec["_hash"] = self._hash(self._prev_hash, body)
-        self._prev_hash = rec["_hash"]
         self._persist(rec)
+        self._prev_hash = rec["_hash"]
         return rec
 
     def log_prediction(
@@ -99,8 +103,8 @@ class DecisionLogger:
         body = json.dumps(rec, sort_keys=True, separators=(",", ":"))
         rec["_prev"] = self._prev_hash
         rec["_hash"] = self._hash(self._prev_hash, body)
-        self._prev_hash = rec["_hash"]
         self._persist(rec)
+        self._prev_hash = rec["_hash"]
         return rec
 
     def _persist(self, rec: dict) -> None:
@@ -110,8 +114,10 @@ class DecisionLogger:
         try:
             with open(self.path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(rec, separators=(",", ":")) + "\n")
-        except Exception:
+                fh.flush()
+        except Exception as exc:
             log.exception("failed to persist audit record")
+            raise AuditWriteError("failed to persist audit record") from exc
         if self._es is not None:  # pragma: no cover
             try:
                 self._es.index(index="disastermind-audit", document=rec)
@@ -121,19 +127,59 @@ class DecisionLogger:
     # ----------------------------------------------------------------- verify
     def verify_chain(self) -> bool:
         """Re-walk the JSONL chain; return True iff untampered."""
-        if not self.path or not os.path.exists(self.path):
-            return True
+        return bool(self.verify_chain_details()["valid"])
+
+    def verify_chain_details(self) -> dict[str, Any]:
+        """Recompute the existing chain and return a read-only verification receipt."""
+        records: list[dict[str, Any]] = []
+        if not self.path:
+            records = [dict(record) for record in getattr(self, "memory", [])]
+        elif not os.path.exists(self.path):
+            return {
+                "valid": True,
+                "entries_checked": 0,
+                "head_hash": GENESIS,
+                "failure_index": None,
+            }
+        else:
+            try:
+                with open(self.path, encoding="utf-8") as fh:
+                    records = [json.loads(line) for line in fh if line.strip()]
+            except Exception:
+                return {
+                    "valid": False,
+                    "entries_checked": 0,
+                    "head_hash": GENESIS,
+                    "failure_index": 1,
+                }
+
         prev = GENESIS
-        with open(self.path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                rec = json.loads(line)
+        checked = 0
+        for index, source in enumerate(records, start=1):
+            try:
+                rec = dict(source)
                 stored = rec.pop("_hash")
                 rec_prev = rec.pop("_prev")
                 body = json.dumps(rec, sort_keys=True, separators=(",", ":"))
                 if rec_prev != prev or self._hash(prev, body) != stored:
-                    return False
+                    return {
+                        "valid": False,
+                        "entries_checked": checked,
+                        "head_hash": prev,
+                        "failure_index": index,
+                    }
                 prev = stored
-        return True
+                checked += 1
+            except (KeyError, TypeError, ValueError):
+                return {
+                    "valid": False,
+                    "entries_checked": checked,
+                    "head_hash": prev,
+                    "failure_index": index,
+                }
+        return {
+            "valid": True,
+            "entries_checked": checked,
+            "head_hash": prev,
+            "failure_index": None,
+        }
