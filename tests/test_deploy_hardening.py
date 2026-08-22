@@ -100,7 +100,10 @@ def test_root_ci_references_pytest_and_matrix() -> None:
     for ver in ("3.11", "3.12", "3.13"):
         assert ver in text, f"git-root CI matrix missing Python {ver}"
     # Installs the package editable with dev extras and runs pytest.
-    assert "pip install -e .[dev]" in text, "CI should install -e .[dev]"
+    # ``api`` is REQUIRED alongside ``dev``: without FastAPI the 35
+    # ``importorskip("fastapi")`` gates skip and the api/ package reports ~0
+    # coverage, which silently drops the total below the enforced floor.
+    assert "pip install -e '.[dev,api]'" in text, "CI should install -e .[dev,api]"
     assert "pytest" in text, "CI must run pytest"
     # Runs with the ignores for the other workstreams' trees.
     assert "--ignore=tests/integration" in text
