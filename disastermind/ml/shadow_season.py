@@ -29,8 +29,8 @@ import os
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
-from .registry import get_model
 from .anchor import DEFAULT_RECEIPT, anchor_status, write_receipt
+from .registry import get_model
 from .shadow import ShadowJournal, export_for_review, freshness, score_season
 
 # Forecast horizon per hazard — how far ahead the prediction speaks, used to

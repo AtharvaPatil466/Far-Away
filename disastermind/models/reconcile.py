@@ -27,11 +27,14 @@ from ..evacuation.decision import decide_zone_evacuation
 from .observation import Observation
 from .reconcile_policy import (
     CAPSTONE_RECOMMENDATIONS,
-    DEMO_ZONE,
+    DEMO_TRAJECTORY_THRESHOLD,
+    DEMO_ZONE_ASSISTED_EGRESS_PPH,
+    DEMO_ZONE_ID,
+    DEMO_ZONE_POPULATION,
+    DEMO_ZONE_ROAD_EGRESS_PPH,
     FAIL_TOWARD_CAUTION_FIELDS,
     authority_of,
     crossed_threshold,
-    DEMO_TRAJECTORY_THRESHOLD,
     p_event_for_magnitude,
     tolerance_of,
 )
@@ -301,8 +304,8 @@ def _recommendation_for(magnitude: Any) -> tuple[str, float]:
         DEMO_TRAJECTORY_THRESHOLD,
     )
     decision = decide_zone_evacuation(
-        DEMO_ZONE["zone_id"], DEMO_ZONE["population"],
-        DEMO_ZONE["road_egress_pph"], DEMO_ZONE["assisted_egress_pph"], traj,
+        DEMO_ZONE_ID, DEMO_ZONE_POPULATION,
+        DEMO_ZONE_ROAD_EGRESS_PPH, DEMO_ZONE_ASSISTED_EGRESS_PPH, traj,
     )
     return decision.recommendation, p
 

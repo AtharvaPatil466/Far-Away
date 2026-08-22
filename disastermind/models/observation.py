@@ -143,9 +143,8 @@ def is_duplicate(a: Observation, b: Observation) -> tuple[bool, str]:
             return False, f"{axis} differs by more than {DUPLICATE_DISTANCE_DEG} deg"
 
     am, bm = a.payload.get("magnitude"), b.payload.get("magnitude")
-    if am is not None and bm is not None:
-        if abs(float(am) - float(bm)) > DUPLICATE_MAGNITUDE_DELTA:
-            return False, f"magnitude differs by more than {DUPLICATE_MAGNITUDE_DELTA}"
+    if am is not None and bm is not None and abs(float(am) - float(bm)) > DUPLICATE_MAGNITUDE_DELTA:
+        return False, f"magnitude differs by more than {DUPLICATE_MAGNITUDE_DELTA}"
 
     return True, (
         f"spatiotemporal match: within {DUPLICATE_TIME_WINDOW_S:.0f}s, "

@@ -30,7 +30,6 @@ Pure, deterministic, stdlib-only. No wall-clock, no global RNG.
 from __future__ import annotations
 
 import math
-
 from dataclasses import dataclass, field
 
 from .risk_trajectory import RiskTrajectory, actionable_lead_hours

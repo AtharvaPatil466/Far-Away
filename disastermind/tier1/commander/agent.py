@@ -297,7 +297,10 @@ class CommanderAgent(BaseAgent):
             via=f"human_approved:{approver}",
         )
         audit_record = self.emit(msg)
-        msg.audit_record = audit_record
+        # Attached dynamically for the caller's convenience; not part of the
+        # frozen Message contract, and adding it there would change to_dict()
+        # and therefore every audit-chain hash.
+        msg.audit_record = audit_record  # type: ignore[attr-defined]
         pending.status = "approved"
         self.stats["approved"] += 1
         self.pending.pop(report_id, None)
@@ -326,7 +329,7 @@ class CommanderAgent(BaseAgent):
             },
         )
         audit_record = self.emit(ack)
-        ack.audit_record = audit_record
+        ack.audit_record = audit_record  # type: ignore[attr-defined]
         pending.status = "rejected"
         self.stats["rejected"] += 1
         self.pending.pop(report_id, None)
