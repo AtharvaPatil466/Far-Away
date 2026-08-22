@@ -20,6 +20,9 @@ Two failures were found here and are now pinned:
 """
 from __future__ import annotations
 
+import contextlib
+import io
+import json
 import os
 import signal
 import subprocess
@@ -27,6 +30,7 @@ import sys
 import textwrap
 import time
 
+from disastermind.audit.decision_log import DecisionLogger
 from disastermind.ml.shadow import ShadowJournal
 
 
@@ -141,3 +145,59 @@ def test_real_sigkill_leaves_a_readable_journal(tmp_path):
 
     journal.record_heartbeat()
     assert journal.verify_chain() is True, "could not resume writing after SIGKILL"
+
+
+# ------------------------------------------------- decision log (audit chain)
+def _audit(tmp_path, n=3):
+    path = str(tmp_path / "audit.jsonl")
+    logger = DecisionLogger(path=path)
+    for i in range(n):
+        logger.log_prediction(model="m", inputs={"i": i}, prediction={"p": 0.1},
+                              shap={}, incident_id=f"i{i}")
+    return path
+
+
+def test_audit_log_reports_a_verdict_on_a_torn_tail(tmp_path):
+    path = _audit(tmp_path)
+    _torn(path)
+
+    assert DecisionLogger(path=path).verify_chain() is False
+
+
+def test_audit_tip_recovers_the_last_complete_record_not_genesis(tmp_path):
+    """The chain must not restart after a crash.
+
+    Resuming from GENESIS would leave every later record unlinked to the
+    history before the interruption — the exact linkage the chain exists for.
+    """
+    path = _audit(tmp_path)
+    surviving = [json.loads(ln)["_hash"] for ln in open(path, encoding="utf-8") if ln.strip()][:-1]
+    _torn(path)
+
+    assert DecisionLogger(path=path)._prev_hash == surviving[-1]
+
+
+def test_torn_audit_log_does_not_dump_a_traceback(tmp_path):
+    """An interrupted write is survivable; it must not look like a crash bug."""
+    path = _audit(tmp_path)
+    _torn(path)
+    captured = io.StringIO()
+
+    with contextlib.redirect_stderr(captured):
+        DecisionLogger(path=path)
+
+    assert "Traceback" not in captured.getvalue()
+
+
+def test_audit_torn_tail_is_counted_and_repairable(tmp_path):
+    path = _audit(tmp_path)
+    _torn(path)
+    logger = DecisionLogger(path=path)
+
+    assert logger.torn_lines() == 1
+    assert logger.truncate_torn_tail() == 1
+    assert DecisionLogger(path=path).verify_chain() is True
+
+    logger.log_prediction(model="m", inputs={"after": 1}, prediction={},
+                          shap={}, incident_id="after")
+    assert DecisionLogger(path=path).verify_chain() is True
