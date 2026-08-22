@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+.venv/
+venv/
+
+# Frontend (clients/web — Vite + npm)
+node_modules/
+*.tsbuildinfo
+# Build / deploy artifacts — must never be committed (from ANY path, incl. a
+# stale group-b/ checkout): Vercel deploy config + Vite dependency cache.
+.vercel/
+.vite/
+
+# OS
+.DS_Store
+
+# DisasterMind runtime artifacts
+audit.jsonl
+*.audit.jsonl
+dm_artifacts_*/
+
+# env / secrets
+.env
+
+# external-review packet (regenerated via `make review-packet`)
+review_packet/
+
+# coverage artefacts
+.coverage
+.coverage.*
+htmlcov/
+
+# agent worktrees
+.claude/worktrees/
+
+# leftover git history-rewrite scratch (filter-branch / filter-repo)
+.git-rewrite/
