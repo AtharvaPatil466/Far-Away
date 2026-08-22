@@ -1,0 +1,46 @@
+/* INVERSA visual foundation — authoritative product-level design tokens. */
+:root {
+  --inversa-obsidian-loam: #13140e;
+  --inversa-bone-vellum: #f4f3e8;
+  --inversa-iron-filings: #404040;
+  --inversa-drift-ash: #84837b;
+  --inversa-lime-surveyor: #ebfc72;
+  --inversa-marsh-olive: #bacd31;
+  --inversa-surface-raised: #171810;
+  --inversa-surface-emphasis: #1b1c14;
+
+  /* Operational colors stay distinct from the product accent. */
+  --inversa-critical: #ff6b5f;
+  --inversa-critical-container: #3b1714;
+  --inversa-warning: #e5b94f;
+  --inversa-safe: #71c98a;
+
+  --inversa-font-editorial: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --inversa-font-telemetry: "JetBrains Mono", "IBM Plex Mono", "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --inversa-text-caption: 13px;
+  --inversa-leading-caption: 1.2;
+  --inversa-text-body: 18px;
+  --inversa-leading-body: 1.62;
+  --inversa-text-subheading: 29px;
+  --inversa-leading-subheading: 1.28;
+  --inversa-text-heading: 58px;
+  --inversa-leading-heading: 1.06;
+  --inversa-text-display: 72px;
+  --inversa-leading-display: 0.9;
+  --inversa-tracking-editorial: -0.03em;
+
+  --inversa-space-5: 5px;
+  --inversa-space-7: 7px;
+  --inversa-space-14: 14px;
+  --inversa-space-18: 18px;
+  --inversa-space-21: 21px;
+  --inversa-space-29: 29px;
+  --inversa-space-59: 59px;
+  --inversa-space-86: 86px;
+  --inversa-space-104: 104px;
+  --inversa-space-119: 119px;
+
+  --inversa-radius-control: 3.6px;
+  --inversa-radius-card: 0px;
+  --inversa-page-max-width: 1200px;
+}
