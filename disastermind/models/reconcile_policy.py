@@ -129,13 +129,12 @@ MAGNITUDE_P_EVENT_ANCHORS: tuple[tuple[float, float], ...] = (
 DEMO_TRAJECTORY_THRESHOLD = 0.05
 
 #: The zone the capstone is evaluated against in the provenance demo. Real Puri
-#: figures, matching the evacuation fixtures already in the repo.
-DEMO_ZONE = {
-    "zone_id": "Puri",
-    "population": 200_500,
-    "road_egress_pph": 8_000.0,
-    "assisted_egress_pph": 4_000.0,
-}
+#: figures, matching the evacuation fixtures already in the repo. Declared as
+#: separate constants rather than a dict so each keeps its own type.
+DEMO_ZONE_ID = "Puri"
+DEMO_ZONE_POPULATION = 200_500
+DEMO_ZONE_ROAD_EGRESS_PPH = 8_000.0
+DEMO_ZONE_ASSISTED_EGRESS_PPH = 4_000.0
 
 
 def p_event_for_magnitude(magnitude: float | None) -> float:
@@ -148,7 +147,7 @@ def p_event_for_magnitude(magnitude: float | None) -> float:
         return anchors[0][1]
     if m >= anchors[-1][0]:
         return anchors[-1][1]
-    for (m0, p0), (m1, p1) in zip(anchors, anchors[1:]):
+    for (m0, p0), (m1, p1) in zip(anchors, anchors[1:], strict=False):
         if m0 <= m <= m1:
             span = m1 - m0
             return p0 + (p1 - p0) * ((m - m0) / span if span else 0.0)

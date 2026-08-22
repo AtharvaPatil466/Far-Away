@@ -10,8 +10,6 @@ import json
 import os
 import socket
 
-import pytest
-
 from disastermind.audit.decision_log import DecisionLogger
 from disastermind.models.observation import Observation, ObservationStore, is_duplicate
 from disastermind.models.reconcile import (

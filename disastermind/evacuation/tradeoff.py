@@ -32,7 +32,6 @@ absolute counts. Pure, deterministic, stdlib-only.
 from __future__ import annotations
 
 import math
-
 from dataclasses import dataclass, field
 
 # Per-cohort evacuation-casualty rate (fraction of THIS cohort's evacuees harmed
