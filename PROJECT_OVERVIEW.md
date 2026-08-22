@@ -22,7 +22,7 @@ surfaced through a browser command-and-control console.
 | **Why the decision layer is the moat** | Plenty of models forecast hazards. What is scarce is the layer that turns a probability into *order or hold* — break-even cost analysis, clearance feasibility, cohort equity, cry-wolf compliance decay — and refuses to issue a mass-evacuation order without a human. |
 | **Design stance** | Standard-library-first and degrades gracefully; explicitly *decision-support* (a human commander holds authority) with a tamper-evident, externally anchored audit trail. |
 | **Measured performance** | ~**257 incidents/s** and ~**7,900 messages/s** through the full agent DAG single-process, p99 **68 ms** per 10-incident batch (`make benchmark`, machine-dependent). |
-| **Evidence quality** | **1,314** offline deterministic Python tests at **86% coverage**, plus a Vitest console suite. Every published number regenerates from committed fixtures via `make reproduce` (Δ = 0), and a live shadow season predicts on the real USGS feed into a hash-chained journal. |
+| **Evidence quality** | **1,349** offline deterministic Python tests at **86% coverage**, plus a Vitest console suite. Every published number regenerates from committed fixtures via `make reproduce` (Δ = 0), and a live shadow season predicts on the real USGS feed into a hash-chained journal. |
 
 ---
 
@@ -215,6 +215,35 @@ four modules — **Commander Dashboard**, **Escalation**, **Field Ops**, and
 **Post-Incident Report** — talking to the platform API (configurable base URL),
 with live status, override controls, SHAP explanations, and PDF report export.
 
+### 4.9 Language-model layer — what is generated, what is not
+
+The platform contains a narration layer. It is disclosed here because a reader is
+entitled to know which text on screen was produced by a model.
+
+| Surface | What it produces | Provider |
+|---|---|---|
+| Escalation narrator | The prose brief attached to an escalation awaiting a commander | Template by default |
+| `/report/generate` | The narrative sections of a post-incident report | Template by default |
+| `/llm/generate` | Free-form narration endpoint used by the console | Template by default |
+
+**The shipped default is the deterministic template provider.** `TemplateClient`
+renders these briefs from the structured decision record using the standard
+library alone — no network, no API key, no model. An optional
+`AnthropicClient` (`pip install .[llm]`) substitutes a hosted model when a key is
+configured; if the key or SDK is absent, or the call fails, the layer falls back
+to the template. No test path touches the network.
+
+**Nothing an LLM produces enters a decision.** The narration layer is strictly
+downstream of the decision record: it reads predictions, recommendations,
+thresholds and audit entries and turns them into prose. It never feeds a
+prediction, a threshold, a routing plan, or the evacuation recommendation, and it
+holds no authority under the escalation matrix.
+
+**No published metric depends on an LLM.** Every number in §5, every figure in
+`docs/TECHNICAL_REPORT.md`, and everything `make reproduce` regenerates comes
+from the deterministic stdlib pipeline. The validation suite never constructs an
+LLM client. Removing the layer entirely would change no reported result.
+
 ---
 
 ## 5. Validation results (real data, leak-free, out-of-sample)
@@ -246,20 +275,53 @@ of detection, the share of real events caught. *FAR* — false-alarm ratio, the
 share of alerts that were wrong. *CSI* — critical success index, a single score
 balancing the two.
 
-| Hazard | Data source | Out-of-sample AUC | vs operational incumbent | Brier | ECE | Hindcast lead (POD ≥ 80%) |
+| Hazard | Data source | Out-of-sample AUC | vs reference baseline† | Brier | ECE | Hindcast lead (POD ≥ 80%) |
 |---|---|---:|---|---:|---:|---|
 | **Earthquake** | USGS catalog (2013–2017, M4.5+) | **0.937** | GMPE 0.959 — **statistical tie** (p = 0.64) | 0.011 | 0.002 | n/a (instantaneous) |
 | **Flood** | GloFAS-ERA5, 12 Indian basins (2010–2023) | **0.944** | persistence 0.934 — **+0.011** (p < 0.004) | 0.028 | 0.004 | **168 h (7 days)** |
 | **Fire (PNW)** | USDA FPA-FOD + ERA5 (2012–2018) | **0.837** | Ångström 0.822 — **+0.016** (p < 0.004) | 0.121 | 0.023 | **72 h (3 days)** |
 | **Fire (India)** | NASA FIRMS VIIRS + ERA5 (2015–2024) | **0.855** | Ångström 0.796 — **+0.059** (p < 0.004) | 0.153 | 0.015 | seasonal* |
 
-**Beats the operational incumbents, with statistical significance:**
+† **Reference, not incumbent.** Persistence and seasonal climatology are
+*no-skill* references; the Ångström index is not operationally deployed (the US
+uses NFDRS, the international standard is FWI/CFFDRS, and India's FSI issues a
+FIRMS-based rating). Clearing them shows the model learned something real — it
+does **not** show it would improve on a product an agency runs today. Comparison
+figures are computed on the model's raw probabilities, matching the uncalibrated
+baselines; the AUC column is the calibrated shipped model, so the two differ
+slightly by design (see `docs/TECHNICAL_REPORT.md` §4.1).
+
+**Beats these reference baselines, with statistical significance:**
 - **Flood** beats *persistence* (the standard no-model hydrological forecast,
   p < 0.004) and *seasonal climatology* (p < 0.004).
 - **Fire** beats the *Angström fire-danger index* — both on US (p < 0.004) and on
   real Indian data (p ≈ 0.02).
-- **Earthquake** statistically matches a GMPE ground-motion attenuation baseline on
-  the damage label and **beats USGS PAGER by +0.22 AUC** on the felt-report label.
+- **Earthquake** statistically matches a GMPE ground-motion attenuation reference
+  on the damage label — a tie, not a win (p = 0.64).
+
+**Unit of analysis and base rate** — FAR, CSI, bias and Brier are uninterpretable
+without these. A 0.87 false-alarm ratio at a 1.4% base rate and at a 42.6% base
+rate describe entirely different systems.
+
+| Hazard | One row = | Test rows | Test base rate |
+|---|---|---:|---:|
+| Earthquake | one M4.5+ catalogued event | 13,812 | **1.41%** (rare-event) |
+| Flood | one gauge-site day | 21,828 | **5.95%** |
+| Fire (PNW) | one grid-cell day | 8,724 | **19.18%** |
+| Fire (India) | one grid-cell day | 10,930 | **42.56%** (near-balanced) |
+
+India fire's comparatively strong CSI (0.60) reflects that easier base rate as
+much as model quality; the earthquake module's high FAR reflects its rare-event
+setting. Neither should be read without the column above.
+
+**Real-time feature availability** — for flood and both fire models, every
+non-seasonal predictor comes from **ERA5/GloFAS reanalysis**, which is *not*
+available at forecast time. An operational deployment would substitute NWP
+forecast fields, whose error is not represented in these results. **The reported
+flood and fire skill is an upper bound on real-time skill, and the gap is
+unquantified.** The earthquake module is unaffected — magnitude, depth, location
+and GMPE attenuation are all known within seconds of detection. Full per-feature
+breakdown in `docs/TECHNICAL_REPORT.md` §3.2; listed as a threat in §7.
 
 **Population-scale cyclone evidence (92 real storms, IBTrACS):** the system would
 have raised a cyclone alert a **median of 54 hours before landfall**, with **≥48 h

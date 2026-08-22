@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/ci.yml/badge.svg)](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/ci.yml)
 [![shadow season](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/shadow-season.yml/badge.svg)](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/shadow-season.yml)
-![Tests](https://img.shields.io/badge/tests-1109%20py%20%2B%2017%20web-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1349%20py%20%2B%2017%20web-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)
 ![Typecheck](https://img.shields.io/badge/mypy-core%20gated-blue)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
@@ -104,7 +104,7 @@ metrics exactly with zero optional dependencies.
 
 ```bash
 # stdlib-only: no broker, solver, ML lib or network required
-python -m pytest -q                      # 1109 tests, all offline (stdlib only)
+python -m pytest -q                      # 1349 tests, all offline (stdlib only)
 
 python - <<'PY'                          # drive a synthetic disaster
 from disastermind.orchestration.build import build_system, should_activate, Signals
