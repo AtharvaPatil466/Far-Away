@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
@@ -159,6 +160,41 @@ def _cmd_anchor(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_ledger(journal: ShadowJournal, *, anchor_receipt: str = DEFAULT_RECEIPT) -> dict:
+    """One flat summary of everything the console footer must state.
+
+    Assembled HERE rather than in the UI so the three counters can never drift
+    apart from the checks that produce them: a footer computing its own
+    "verified" from stale props is exactly how a dashboard ends up lying.
+    """
+    card = score_season(journal)
+    return {
+        "settled": card["n_resolved"],
+        "pending": card["n_unresolved"],
+        "predictions": card["n_predictions"],
+        "scoreable": card.get("scoreable", False),
+        "reason": card.get("reason", ""),
+        "chain_intact": journal.verify_chain(),
+        "monotonic": journal.verify_monotonic(),
+        "freshness": freshness(journal),
+        "anchor": anchor_status(journal.chain_head(), path=anchor_receipt),
+    }
+
+
+def _cmd_ledger(args: argparse.Namespace) -> int:
+    """Emit the console-facing ledger summary (static JSON, no server needed)."""
+    ledger = build_ledger(ShadowJournal(args.journal), anchor_receipt=args.anchor_receipt)
+    text = json.dumps(ledger, indent=2, sort_keys=True) + "\n"
+    if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
+        with open(args.out, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        print(f"wrote ledger -> {args.out}")
+    else:
+        print(text, end="")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="disastermind.ml.shadow_season",
@@ -198,6 +234,11 @@ def _build_parser() -> argparse.ArgumentParser:
     a.add_argument("--repo", default="")
     a.add_argument("--out", default=DEFAULT_RECEIPT)
     a.set_defaults(func=_cmd_anchor)
+
+    lg = sub.add_parser("ledger", help="emit the console ledger summary as JSON")
+    lg.add_argument("--anchor-receipt", default=DEFAULT_RECEIPT)
+    lg.add_argument("-o", "--out", default="", help="output path (default: stdout)")
+    lg.set_defaults(func=_cmd_ledger)
 
     v = sub.add_parser("verify", help="re-verify the journal hash-chain")
     v.add_argument("--anchor-receipt", default=DEFAULT_RECEIPT,

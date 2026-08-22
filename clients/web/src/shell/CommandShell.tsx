@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { UnifiedModuleKey } from './TopNav'
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
+import { AuditFooter } from '@/components/AuditFooter'
 
 interface NavItem {
   key: UnifiedModuleKey
@@ -202,6 +203,10 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
 
         {/* Canvas */}
         <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+
+        {/* Always-visible ledger status: settled/pending counters, feed
+            liveness, external anchor, and chain integrity as separate lights. */}
+        <AuditFooter />
       </div>
     </div>
   )

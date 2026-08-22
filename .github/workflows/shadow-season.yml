@@ -61,6 +61,15 @@ jobs:
             --server-time "$(date -u +%Y-%m-%dT%H:%M:%S+00:00)" \
             --repo "$GITHUB_REPOSITORY"
 
+      - name: Refresh the console ledger
+        # The footer reads a static JSON snapshot. Regenerating it in the same
+        # run that writes the journal is what stops the bar showing counters
+        # older than the data they describe.
+        run: |
+          python -m disastermind.ml.shadow_season \
+            --journal shadow/usgs_season.jsonl ledger \
+            -o clients/web/public/data/ledger.json
+
       - name: Verify chain integrity
         run: |
           python -m disastermind.ml.shadow_season \
@@ -68,13 +77,13 @@ jobs:
 
       - name: Commit the updated journal
         run: |
-          if git diff --quiet -- shadow/usgs_season.jsonl shadow/anchor_receipt.json; then
+          if git diff --quiet -- shadow/usgs_season.jsonl shadow/anchor_receipt.json clients/web/public/data/ledger.json; then
             echo "No new predictions or outcomes today."
             exit 0
           fi
           git config user.name  "disastermind-shadow[bot]"
           git config user.email "shadow-bot@users.noreply.github.com"
-          git add shadow/usgs_season.jsonl shadow/anchor_receipt.json
+          git add shadow/usgs_season.jsonl shadow/anchor_receipt.json clients/web/public/data/ledger.json
           n_pred=$(grep -c '"kind":"prediction"' shadow/usgs_season.jsonl || true)
           n_out=$(grep -c '"kind":"outcome"' shadow/usgs_season.jsonl || true)
           git commit -m "shadow: update live USGS season (predictions=${n_pred}, outcomes=${n_out})"
