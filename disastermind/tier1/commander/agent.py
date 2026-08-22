@@ -297,7 +297,11 @@ class CommanderAgent(BaseAgent):
             via=f"human_approved:{approver}",
         )
         audit_record = self.emit(msg)
-        msg.audit_record = audit_record
+        # Side-channel for DashboardService (read via getattr after emit); NOT a
+        # dataclass field, so Message.to_dict()/wire shape stays unchanged.
+        # setattr keeps the dynamic attachment mypy-clean; B010's "just assign"
+        # advice is exactly what mypy's attr-defined rejects here.
+        setattr(msg, "audit_record", audit_record)  # noqa: B010
         pending.status = "approved"
         self.stats["approved"] += 1
         self.pending.pop(report_id, None)
@@ -326,7 +330,7 @@ class CommanderAgent(BaseAgent):
             },
         )
         audit_record = self.emit(ack)
-        ack.audit_record = audit_record
+        setattr(ack, "audit_record", audit_record)  # noqa: B010  # side-channel; see approve()
         pending.status = "rejected"
         self.stats["rejected"] += 1
         self.pending.pop(report_id, None)
