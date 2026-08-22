@@ -1,0 +1,69 @@
+import { useEffect, useState } from 'react'
+import { useIsMobile } from './hooks/useIsMobile'
+import { Dashboard } from './modules/dashboard/Dashboard'
+import { Escalation } from './modules/escalation/Escalation'
+import { Field } from './modules/field/Field'
+import { Report } from './modules/report/Report'
+import { Evidence } from './modules/evidence/Evidence'
+import { SplashScreen } from './shell/SplashScreen'
+import { CommandShell } from './shell/CommandShell'
+import type { UnifiedModuleKey } from './shell/TopNav'
+import { OfflineBanner } from './components/OfflineBanner'
+
+const MODULE_KEYS: UnifiedModuleKey[] = ['dashboard', 'escalation', 'report', 'evidence', 'field']
+
+function initialModule(isMobile: boolean): UnifiedModuleKey {
+  const param = new URLSearchParams(window.location.search).get('m')
+  if (param && (MODULE_KEYS as string[]).includes(param)) {
+    return param as UnifiedModuleKey
+  }
+  return isMobile ? 'field' : 'dashboard'
+}
+
+function App() {
+  const isMobile = useIsMobile()
+  const [activeModule, setActiveModule] = useState<UnifiedModuleKey>(() => initialModule(isMobile))
+  const [bootState, setBootState] = useState<'splash' | 'transition' | 'ready'>('splash')
+
+  useEffect(() => {
+    const splashTimer = window.setTimeout(() => {
+      setBootState('transition')
+      window.setTimeout(() => setBootState('ready'), 260)
+    }, 2000)
+    return () => window.clearTimeout(splashTimer)
+  }, [])
+
+  // Opt the document into the light "tactical sand" surface.
+  useEffect(() => {
+    document.body.classList.add('dm-light')
+    return () => document.body.classList.remove('dm-light')
+  }, [])
+
+  // The field interface is a self-contained full-screen mobile app.
+  if (isMobile) {
+    return (
+      <>
+        <Field />
+        <SplashScreen visible={bootState !== 'ready'} />
+        <OfflineBanner />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <CommandShell activeModule={activeModule} onChange={setActiveModule}>
+        {activeModule === 'dashboard' && <Dashboard />}
+        {activeModule === 'escalation' && <Escalation />}
+        {activeModule === 'report' && <Report />}
+        {activeModule === 'evidence' && <Evidence />}
+        {activeModule === 'field' && <Field />}
+      </CommandShell>
+
+      <SplashScreen visible={bootState !== 'ready'} />
+      <OfflineBanner />
+    </>
+  )
+}
+
+export default App
