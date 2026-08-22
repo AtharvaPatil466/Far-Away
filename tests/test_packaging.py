@@ -90,7 +90,7 @@ def test_ci_workflow_matrix_and_pytest() -> None:
     text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     for ver in ("3.11", "3.12", "3.13"):
         assert ver in text, f"CI matrix missing Python {ver}"
-    assert "pip install -e .[dev]" in text
+    assert "pip install -e '.[dev,api]'" in text
     assert "python -m pytest -q" in text
 
 

@@ -747,10 +747,13 @@ def run_validation(
 def _md_comparison(name: str, comp: dict[str, Any]) -> str:
     a = comp["auc"]
     sig = "YES" if a["significant_at_5pct"] else "no"
+    # At the floor no resample favoured the baseline, so the value is a bound,
+    # not an estimate. Rendering it as "= 0.0040" overstates the precision.
+    p = f"< {a['p_value']:.4f}" if a.get("p_at_floor") else f"{a['p_value']:.4f}"
     return (
         f"| {name} | {a['baseline']:.4f} | {a['model']:.4f} | "
         f"{a['delta_mean']:+.4f} [{a['delta_ci95'][0]:+.4f}, {a['delta_ci95'][1]:+.4f}] | "
-        f"{a['p_value']:.4f} | {sig} |"
+        f"{p} | {sig} |"
     )
 
 

@@ -1,15 +1,19 @@
 import { useState } from 'react'
-import { Activity, Database, Radio, ScrollText, Scale, ShieldCheck, Wind } from 'lucide-react'
+import {
+  Activity, Database, Radio, ScrollText, Scale, ShieldCheck, SlidersHorizontal, Wind,
+} from 'lucide-react'
 import './evidence.css'
 import { CycloneBacktestMap } from './components/CycloneBacktestMap'
 import { FeedProvenance } from './components/FeedProvenance'
 import { ShadowJournal } from './components/ShadowJournal'
 import { Resilience } from './components/Resilience'
 import { Limitations } from './components/Limitations'
+import { SensitivityChart } from './components/SensitivityChart'
 import { AuditIntegrity } from './components/AuditIntegrity'
 import { LiveEvidence } from './components/LiveEvidence'
 
-type EvidenceTab = 'live' | 'cyclone' | 'feeds' | 'shadow' | 'audit' | 'resilience' | 'limits'
+type EvidenceTab =
+  | 'live' | 'cyclone' | 'feeds' | 'shadow' | 'audit' | 'resilience' | 'sensitivity' | 'limits'
 
 const TABS: Array<{ id: EvidenceTab; label: string; Icon: typeof Wind }> = [
   { id: 'live', label: 'LIVE EVIDENCE', Icon: Database },
@@ -18,6 +22,7 @@ const TABS: Array<{ id: EvidenceTab; label: string; Icon: typeof Wind }> = [
   { id: 'shadow', label: 'Shadow Demo', Icon: ScrollText },
   { id: 'audit', label: 'Audit Integrity', Icon: ShieldCheck },
   { id: 'resilience', label: 'Resilience', Icon: Activity },
+  { id: 'sensitivity', label: 'Sensitivity', Icon: SlidersHorizontal },
   { id: 'limits', label: 'Limitations', Icon: Scale },
 ]
 
@@ -49,6 +54,7 @@ export function Evidence() {
         {tab === 'shadow' && <ShadowJournal />}
         {tab === 'audit' && <AuditIntegrity />}
         {tab === 'resilience' && <Resilience />}
+        {tab === 'sensitivity' && <SensitivityChart />}
         {tab === 'limits' && <Limitations />}
       </div>
     </div>

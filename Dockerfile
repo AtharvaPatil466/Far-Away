@@ -48,7 +48,7 @@ COPY disastermind ./disastermind
 
 # Install the package + the web-server deps (the default CMD serves the API via
 # uvicorn). They are kept out of the core runtime so the loop/CLI stay stdlib-only.
-RUN pip install ".${EXTRAS}" "fastapi>=0.110" "uvicorn[standard]>=0.29"
+RUN pip install ".${EXTRAS}" ".[api]"
 
 # ----------------------------------------------------------------- stage: runtime
 FROM python:3.13-slim-bookworm AS runtime

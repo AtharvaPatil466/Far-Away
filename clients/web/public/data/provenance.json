@@ -1,0 +1,507 @@
+{
+  "canonical": {
+    "contested_fields": [
+      "magnitude"
+    ],
+    "fields": {
+      "depth_km": {
+        "alternatives": [
+          {
+            "beyond_tolerance": false,
+            "delta": 3.0,
+            "obs_id": "obs-001",
+            "observed_at": "2026-08-22T10:00:00+00:00",
+            "source": "usgs",
+            "value": 10.0
+          }
+        ],
+        "contested": false,
+        "corroboration": 1,
+        "field": "depth_km",
+        "obs_id": "obs-004",
+        "observed_at": "2026-08-22T10:10:00+00:00",
+        "reason": "equal authority; usgs observed later (2026-08-22T10:10:00+00:00 > 2026-08-22T10:00:00+00:00)",
+        "rule": "recency",
+        "source": "usgs",
+        "unresolved": false,
+        "value": 13.0
+      },
+      "lat": {
+        "alternatives": [
+          {
+            "beyond_tolerance": false,
+            "delta": 0.02,
+            "obs_id": "obs-003",
+            "observed_at": "2026-08-22T10:10:00+00:00",
+            "source": "india_ncs",
+            "value": 19.82
+          }
+        ],
+        "contested": false,
+        "corroboration": 2,
+        "field": "lat",
+        "obs_id": "obs-001",
+        "observed_at": "2026-08-22T10:00:00+00:00",
+        "reason": "usgs outranks india_ncs on lat (authority 3 > 1)",
+        "rule": "authority",
+        "source": "usgs",
+        "unresolved": false,
+        "value": 19.8
+      },
+      "lon": {
+        "alternatives": [
+          {
+            "beyond_tolerance": false,
+            "delta": 0.02,
+            "obs_id": "obs-003",
+            "observed_at": "2026-08-22T10:10:00+00:00",
+            "source": "india_ncs",
+            "value": 85.88
+          }
+        ],
+        "contested": false,
+        "corroboration": 2,
+        "field": "lon",
+        "obs_id": "obs-001",
+        "observed_at": "2026-08-22T10:00:00+00:00",
+        "reason": "usgs outranks india_ncs on lon (authority 3 > 1)",
+        "rule": "authority",
+        "source": "usgs",
+        "unresolved": false,
+        "value": 85.9
+      },
+      "magnitude": {
+        "alternatives": [
+          {
+            "beyond_tolerance": true,
+            "delta": 0.6,
+            "obs_id": "obs-010",
+            "observed_at": "2026-08-22T11:10:00+00:00",
+            "source": "india_ncs",
+            "value": 5.8
+          },
+          {
+            "beyond_tolerance": true,
+            "delta": 0.8,
+            "obs_id": "obs-003",
+            "observed_at": "2026-08-22T10:10:00+00:00",
+            "source": "india_ncs",
+            "value": 5.6
+          },
+          {
+            "beyond_tolerance": true,
+            "delta": 0.8,
+            "obs_id": "obs-005",
+            "observed_at": "2026-08-22T10:10:00+00:00",
+            "source": "emsc",
+            "value": 5.6
+          },
+          {
+            "beyond_tolerance": true,
+            "delta": 0.5,
+            "obs_id": "obs-007",
+            "observed_at": "2026-08-22T10:05:00+00:00",
+            "source": "emsc",
+            "value": 5.9
+          }
+        ],
+        "contested": true,
+        "corroboration": 1,
+        "field": "magnitude",
+        "obs_id": "obs-009",
+        "observed_at": "2026-08-22T11:10:00+00:00",
+        "reason": "authority, recency and corroboration all tie between emsc=6.4 and india_ncs=5.8 \u2014 no consensus. The higher-consequence value is carried forward so the recommendation errs toward caution; a human must resolve it",
+        "rule": "unresolved",
+        "source": "emsc",
+        "unresolved": true,
+        "value": 6.4
+      },
+      "place": {
+        "alternatives": [],
+        "contested": false,
+        "corroboration": 1,
+        "field": "place",
+        "obs_id": "obs-001",
+        "observed_at": "2026-08-22T10:00:00+00:00",
+        "reason": "only usgs reported place",
+        "rule": "authority",
+        "source": "usgs",
+        "unresolved": false,
+        "value": "offshore Puri, Odisha"
+      }
+    },
+    "incident_id": "eq-2026-0822-puri",
+    "p_event": 0.68,
+    "recommendation": "ORDER_BY_DEADLINE",
+    "unresolved_fields": [
+      "magnitude"
+    ]
+  },
+  "counts": {
+    "by_kind": {
+      "CONFLICT": 5,
+      "LATE_CORRECTION": 1,
+      "RETRACTION": 1,
+      "UPDATE": 2
+    },
+    "meaningful": 6,
+    "minor": 3,
+    "suppressed_by_toggle": 3,
+    "total": 9
+  },
+  "incident_id": "eq-2026-0822-puri",
+  "observations": [
+    {
+      "content_hash": "da3d56ddfafffa188b16d1be64e38782e1f07435213e1ce790088ce3613471a8",
+      "is_late": false,
+      "is_retraction": false,
+      "obs_id": "obs-001",
+      "observed_at": "2026-08-22T10:00:00+00:00",
+      "payload": {
+        "depth_km": 10.0,
+        "lat": 19.8,
+        "lon": 85.9,
+        "magnitude": 5.4,
+        "place": "offshore Puri, Odisha"
+      },
+      "received_at": "2026-08-22T10:02:00+00:00",
+      "source": "usgs",
+      "source_event_id": "us7000abcd"
+    },
+    {
+      "content_hash": "502b1ad45c3864e7183481a590da640d9256f48ba0394ac2145ced8c5742c094",
+      "is_late": false,
+      "is_retraction": false,
+      "obs_id": "obs-003",
+      "observed_at": "2026-08-22T10:10:00+00:00",
+      "payload": {
+        "lat": 19.82,
+        "lon": 85.88,
+        "magnitude": 5.6
+      },
+      "received_at": "2026-08-22T10:12:00+00:00",
+      "source": "india_ncs",
+      "source_event_id": "ncs-2026-1183"
+    },
+    {
+      "content_hash": "f2a57574b9f34bc4ae2115968ef14d09cb38a1eb10465b4022b41532f0250086",
+      "is_late": true,
+      "is_retraction": false,
+      "obs_id": "obs-004",
+      "observed_at": "2026-08-22T10:10:00+00:00",
+      "payload": {
+        "depth_km": 13.0
+      },
+      "received_at": "2026-08-22T10:21:00+00:00",
+      "source": "usgs",
+      "source_event_id": "us7000abcd-r2"
+    },
+    {
+      "content_hash": "97406f316feec77128c2b68bce8ee77f56898ebe44dfe8fae35b1875eb2ce0a7",
+      "is_late": true,
+      "is_retraction": false,
+      "obs_id": "obs-005",
+      "observed_at": "2026-08-22T10:10:00+00:00",
+      "payload": {
+        "magnitude": 5.6
+      },
+      "received_at": "2026-08-22T10:30:00+00:00",
+      "source": "emsc",
+      "source_event_id": "emsc-991204"
+    },
+    {
+      "content_hash": "004e7af0422d53e4a53ae5be85cdc5733a3bee0785a6ac87d17402fe3ef6151b",
+      "is_late": false,
+      "is_retraction": false,
+      "obs_id": "obs-006",
+      "observed_at": "2026-08-22T10:40:00+00:00",
+      "payload": {
+        "magnitude": 6.2
+      },
+      "received_at": "2026-08-22T10:41:00+00:00",
+      "source": "usgs",
+      "source_event_id": "us7000abcd-r3"
+    },
+    {
+      "content_hash": "931d7b98430e36b4da601dfa804952c5c196dad11e5955444d25116ded3b188f",
+      "is_late": true,
+      "is_retraction": false,
+      "obs_id": "obs-007",
+      "observed_at": "2026-08-22T10:05:00+00:00",
+      "payload": {
+        "magnitude": 5.9
+      },
+      "received_at": "2026-08-22T10:50:00+00:00",
+      "source": "emsc",
+      "source_event_id": "emsc-991204-late"
+    },
+    {
+      "content_hash": "9d28f1d7e58a2481b8c9d8522e851aba85022c0989d6ed6167ad86a1f2c1adb2",
+      "is_late": false,
+      "is_retraction": true,
+      "obs_id": "obs-008",
+      "observed_at": "2026-08-22T11:00:00+00:00",
+      "payload": {
+        "retracted": [
+          "magnitude"
+        ]
+      },
+      "received_at": "2026-08-22T11:01:00+00:00",
+      "source": "usgs",
+      "source_event_id": "us7000abcd-w"
+    },
+    {
+      "content_hash": "b2a1b27a3bdfd4b41d68a4782eee8100305fd955283cfd2db3ac7f840aac8bd5",
+      "is_late": false,
+      "is_retraction": false,
+      "obs_id": "obs-009",
+      "observed_at": "2026-08-22T11:10:00+00:00",
+      "payload": {
+        "magnitude": 6.4
+      },
+      "received_at": "2026-08-22T11:11:00+00:00",
+      "source": "emsc",
+      "source_event_id": "emsc-991204-r2"
+    },
+    {
+      "content_hash": "9dfeef94d4f635ccdea4f37d0a94960cb105e5658e9bd2f5d72f84b051197e3c",
+      "is_late": false,
+      "is_retraction": false,
+      "obs_id": "obs-010",
+      "observed_at": "2026-08-22T11:10:00+00:00",
+      "payload": {
+        "magnitude": 5.8
+      },
+      "received_at": "2026-08-22T11:12:00+00:00",
+      "source": "india_ncs",
+      "source_event_id": "ncs-2026-1183-r2"
+    }
+  ],
+  "policy": "DisasterMind \u2014 reconciliation policy (active values)\n==============================================================\n\nPRECEDENCE, applied per field, in order:\n  1. authority      highest-ranked source for that field wins\n  2. recency        latest observed_at (never received_at)\n  3. corroboration  most independent sources reporting the value\n  ~. UNRESOLVED     all three tie -> no winner is invented\n\nSOURCE AUTHORITY (higher wins)\n  magnitude    india_ncs=2, usgs=2, emsc=2\n  depth_km     usgs=3, emsc=2, india_ncs=1\n  lat          usgs=3, emsc=2, india_ncs=1\n  lon          usgs=3, emsc=2, india_ncs=1\n  place        india_ncs=3, usgs=2, emsc=1\n\nFIELD TOLERANCE (at or below = agreement, not news)\n  magnitude    +/- 0.1\n  depth_km     +/- 5.0\n  lat          +/- 0.1\n  lon          +/- 0.1\n\nDUPLICATE MATCH (all must hold, absent a shared source_event_id)\n  time window      120.0 s\n  distance         0.5 deg\n  magnitude delta  0.5\n\nMEANINGFUL if ANY holds (else MINOR \u2014 recorded, never discarded)\n  (a) crosses a dispatch threshold:\n        magnitude  [4.5, 5.5, 6.0, 6.5, 7.0]\n        depth_km   [70.0]\n  (b) changes the capstone recommendation:\n        NO_ACTIONABLE_WARNING -> BELOW_BREAKEVEN_HOLD -> NOT_CLEARABLE_VERTICAL -> ORDER_BY_DEADLINE\n  (c) exceeds the field tolerance listed above\n\nRETRACTION\n  marker 'retracted' removes the field from canonical state;\n  the observation itself is retained and stays inspectable.",
+  "revisions": [
+    {
+      "at": "2026-08-22T10:02:00+00:00",
+      "causing_obs_id": "obs-001",
+      "changes": [
+        {
+          "after": 10.0,
+          "before": null,
+          "contested": false,
+          "field": "depth_km",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported depth_km"
+        },
+        {
+          "after": 19.8,
+          "before": null,
+          "contested": false,
+          "field": "lat",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported lat"
+        },
+        {
+          "after": 85.9,
+          "before": null,
+          "contested": false,
+          "field": "lon",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported lon"
+        },
+        {
+          "after": 5.4,
+          "before": null,
+          "contested": false,
+          "field": "magnitude",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported magnitude"
+        },
+        {
+          "after": "offshore Puri, Odisha",
+          "before": null,
+          "contested": false,
+          "field": "place",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported place"
+        }
+      ],
+      "classification": "MEANINGFUL",
+      "kind": "UPDATE",
+      "reason": "first report established depth_km, lat, lon, magnitude, place \u2014 there was no prior value to compare against",
+      "recommendation_after": "BELOW_BREAKEVEN_HOLD",
+      "recommendation_before": "NO_ACTIONABLE_WARNING",
+      "seq": 1,
+      "source": "usgs"
+    },
+    {
+      "at": "2026-08-22T10:12:00+00:00",
+      "causing_obs_id": "obs-003",
+      "changes": [
+        {
+          "after": 5.6,
+          "before": 5.4,
+          "contested": true,
+          "field": "magnitude",
+          "kind": "value",
+          "rule": "recency",
+          "rule_reason": "equal authority; india_ncs observed later (2026-08-22T10:10:00+00:00 > 2026-08-22T10:00:00+00:00)"
+        }
+      ],
+      "classification": "MEANINGFUL",
+      "kind": "CONFLICT",
+      "reason": "crossed the magnitude 5.5 dispatch threshold (5.4 \u2192 5.6)",
+      "recommendation_after": "BELOW_BREAKEVEN_HOLD",
+      "recommendation_before": "BELOW_BREAKEVEN_HOLD",
+      "seq": 2,
+      "source": "india_ncs"
+    },
+    {
+      "at": "2026-08-22T10:21:00+00:00",
+      "causing_obs_id": "obs-004",
+      "changes": [
+        {
+          "after": 13.0,
+          "before": 10.0,
+          "contested": false,
+          "field": "depth_km",
+          "kind": "value",
+          "rule": "recency",
+          "rule_reason": "equal authority; usgs observed later (2026-08-22T10:10:00+00:00 > 2026-08-22T10:00:00+00:00)"
+        }
+      ],
+      "classification": "MINOR",
+      "kind": "UPDATE",
+      "reason": "sub-tolerance jitter, depth_km 3 < 5",
+      "recommendation_after": "BELOW_BREAKEVEN_HOLD",
+      "recommendation_before": "BELOW_BREAKEVEN_HOLD",
+      "seq": 3,
+      "source": "usgs"
+    },
+    {
+      "at": "2026-08-22T10:30:00+00:00",
+      "causing_obs_id": "obs-005",
+      "changes": [
+        {
+          "after": 5.6,
+          "before": 5.6,
+          "contested": true,
+          "field": "magnitude",
+          "kind": "value",
+          "rule": "corroboration",
+          "rule_reason": "2 independent sources report 5.6; agreement, not a tie to break"
+        }
+      ],
+      "classification": "MINOR",
+      "kind": "CONFLICT",
+      "reason": "magnitude value unchanged (5.6); only the selecting rule moved to 'corroboration' \u2014 provenance changed, the number did not",
+      "recommendation_after": "BELOW_BREAKEVEN_HOLD",
+      "recommendation_before": "BELOW_BREAKEVEN_HOLD",
+      "seq": 4,
+      "source": "emsc"
+    },
+    {
+      "at": "2026-08-22T10:41:00+00:00",
+      "causing_obs_id": "obs-006",
+      "changes": [
+        {
+          "after": 6.2,
+          "before": 5.6,
+          "contested": true,
+          "field": "magnitude",
+          "kind": "value",
+          "rule": "recency",
+          "rule_reason": "equal authority; usgs observed later (2026-08-22T10:40:00+00:00 > 2026-08-22T10:10:00+00:00)"
+        }
+      ],
+      "classification": "MEANINGFUL",
+      "kind": "CONFLICT",
+      "reason": "changed the recommendation: BELOW_BREAKEVEN_HOLD \u2192 ORDER_BY_DEADLINE",
+      "recommendation_after": "ORDER_BY_DEADLINE",
+      "recommendation_before": "BELOW_BREAKEVEN_HOLD",
+      "seq": 5,
+      "source": "usgs"
+    },
+    {
+      "at": "2026-08-22T10:50:00+00:00",
+      "causing_obs_id": "obs-007",
+      "changes": [],
+      "classification": "MINOR",
+      "kind": "LATE_CORRECTION",
+      "reason": "observed 2026-08-22T10:05:00+00:00 but delivered after a newer report; canonical state unchanged \u2014 recorded, not applied",
+      "recommendation_after": "ORDER_BY_DEADLINE",
+      "recommendation_before": "ORDER_BY_DEADLINE",
+      "seq": 6,
+      "source": "emsc"
+    },
+    {
+      "at": "2026-08-22T11:01:00+00:00",
+      "causing_obs_id": "obs-008",
+      "changes": [
+        {
+          "after": 5.6,
+          "before": 6.2,
+          "contested": true,
+          "field": "magnitude",
+          "kind": "value",
+          "rule": "corroboration",
+          "rule_reason": "2 independent sources report 5.6; agreement, not a tie to break"
+        }
+      ],
+      "classification": "MEANINGFUL",
+      "kind": "RETRACTION",
+      "reason": "changed the recommendation: ORDER_BY_DEADLINE \u2192 BELOW_BREAKEVEN_HOLD",
+      "recommendation_after": "BELOW_BREAKEVEN_HOLD",
+      "recommendation_before": "ORDER_BY_DEADLINE",
+      "seq": 7,
+      "source": "usgs"
+    },
+    {
+      "at": "2026-08-22T11:11:00+00:00",
+      "causing_obs_id": "obs-009",
+      "changes": [
+        {
+          "after": 6.4,
+          "before": 5.6,
+          "contested": true,
+          "field": "magnitude",
+          "kind": "value",
+          "rule": "recency",
+          "rule_reason": "equal authority; emsc observed later (2026-08-22T11:10:00+00:00 > 2026-08-22T10:10:00+00:00)"
+        }
+      ],
+      "classification": "MEANINGFUL",
+      "kind": "CONFLICT",
+      "reason": "changed the recommendation: BELOW_BREAKEVEN_HOLD \u2192 ORDER_BY_DEADLINE",
+      "recommendation_after": "ORDER_BY_DEADLINE",
+      "recommendation_before": "BELOW_BREAKEVEN_HOLD",
+      "seq": 8,
+      "source": "emsc"
+    },
+    {
+      "at": "2026-08-22T11:12:00+00:00",
+      "causing_obs_id": "obs-010",
+      "changes": [
+        {
+          "after": 6.4,
+          "before": 6.4,
+          "contested": true,
+          "field": "magnitude",
+          "kind": "value",
+          "rule": "unresolved",
+          "rule_reason": "authority, recency and corroboration all tie between emsc=6.4 and india_ncs=5.8 \u2014 no consensus. The higher-consequence value is carried forward so the recommendation errs toward caution; a human must resolve it"
+        }
+      ],
+      "classification": "MEANINGFUL",
+      "kind": "CONFLICT",
+      "reason": "reconciliation deadlocked \u2014 sources tie on authority, recency and corroboration, so no value is asserted and a human must decide",
+      "recommendation_after": "ORDER_BY_DEADLINE",
+      "recommendation_before": "ORDER_BY_DEADLINE",
+      "seq": 9,
+      "source": "india_ncs"
+    }
+  ]
+}
