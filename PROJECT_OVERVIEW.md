@@ -15,11 +15,13 @@ surfaced through a browser command-and-control console.
 
 | | |
 |---|---|
-| **What it is** | A decision-support system for multi-hazard disaster early warning and coordination. |
+| **What it is** | A **decision** system for multi-hazard disaster response. Prediction is an input; the deliverable is an evacuation recommendation a commander can act on, with the authority boundary and the audit trail around it. |
+| **Headline result** | Across **92 real cyclones** (IBTrACS), the system would have raised an alert a **median of 54 hours before landfall** — ≥48 h for ~58% of storms, ≥72 h for ~40%. |
+| **Known limits (read these second)** | Earthquakes are rapid impact assessment, **not forecasting**, and statistically tie the GMPE baseline. High detection is bought with high false-alarm ratios. The evacuation layer's clearance and casualty rates are **planning assumptions, not agency-calibrated** — see §5 for how far they can be wrong before the recommendation changes, and `docs/TECHNICAL_REPORT.md` §6 for the full failure analysis. |
 | **Hazards** | Cyclone/flood, earthquake (rapid impact assessment), urban/forest fire. |
-| **Differentiator** | Every model is validated on **real historical data**, leak-free, and shown to beat the operational baselines with statistical significance — not a demo on synthetic numbers. |
-| **Design stance** | Standard-library-first and degrades gracefully; explicitly *decision-support* (a human commander holds authority) with a tamper-evident audit trail. |
-| **Scale** | ~39,000 lines of Python across 34 subsystems, a Vite + React 19 + TypeScript console (74 source modules), and a suite of ~1,110 offline, deterministic Python tests alongside a Vitest console suite. |
+| **Why the decision layer is the moat** | Plenty of models forecast hazards. What is scarce is the layer that turns a probability into *order or hold* — break-even cost analysis, clearance feasibility, cohort equity, cry-wolf compliance decay — and refuses to issue a mass-evacuation order without a human. |
+| **Design stance** | Standard-library-first and degrades gracefully; explicitly *decision-support* (a human commander holds authority) with a tamper-evident, externally anchored audit trail. |
+| **Evidence quality** | **1,314** offline deterministic Python tests at **86% coverage**, plus a Vitest console suite. Every published number regenerates from committed fixtures via `make reproduce` (Δ = 0), and a live shadow season predicts on the real USGS feed into a hash-chained journal. |
 
 ---
 
@@ -235,17 +237,25 @@ failure analysis; reproduce every number with `make reproduce`.
 > dependency-free model remains the shipped default. Flood risk is modelled from
 > tabular hydro-meteorological drivers.
 
-| Hazard | Data source | Out-of-sample AUC | Brier | ECE | Actionable lead (POD ≥ 80%) |
-|---|---|---:|---:|---:|---|
-| **Earthquake** | USGS catalog (2013–2017, M4.5+) | **0.937** | 0.011 | 0.002 | n/a (instantaneous) |
-| **Flood** | GloFAS-ERA5, 12 Indian basins (2010–2023) | **0.944** | 0.028 | 0.004 | **168 h (7 days)** |
-| **Fire (PNW)** | USDA FPA-FOD + ERA5 (2012–2018) | **0.837** | 0.121 | 0.023 | **72 h (3 days)** |
-| **Fire (India)** | NASA FIRMS VIIRS + ERA5 (2015–2024) | **0.855** | 0.153 | 0.015 | seasonal* |
+**Metrics, defined once.** *AUC* — probability the model ranks a real event
+above a non-event (0.5 = coin flip, 1.0 = perfect). *Brier* — mean squared error
+of the probability itself; lower is better. *ECE* — expected calibration error:
+how far "70% confident" is from being right 70% of the time. *POD* — probability
+of detection, the share of real events caught. *FAR* — false-alarm ratio, the
+share of alerts that were wrong. *CSI* — critical success index, a single score
+balancing the two.
+
+| Hazard | Data source | Out-of-sample AUC | vs operational incumbent | Brier | ECE | Hindcast lead (POD ≥ 80%) |
+|---|---|---:|---|---:|---:|---|
+| **Earthquake** | USGS catalog (2013–2017, M4.5+) | **0.937** | GMPE 0.959 — **statistical tie** (p = 0.64) | 0.011 | 0.002 | n/a (instantaneous) |
+| **Flood** | GloFAS-ERA5, 12 Indian basins (2010–2023) | **0.944** | persistence 0.934 — **+0.011** (p < 0.004) | 0.028 | 0.004 | **168 h (7 days)** |
+| **Fire (PNW)** | USDA FPA-FOD + ERA5 (2012–2018) | **0.837** | Ångström 0.822 — **+0.016** (p < 0.004) | 0.121 | 0.023 | **72 h (3 days)** |
+| **Fire (India)** | NASA FIRMS VIIRS + ERA5 (2015–2024) | **0.855** | Ångström 0.796 — **+0.059** (p < 0.004) | 0.153 | 0.015 | seasonal* |
 
 **Beats the operational incumbents, with statistical significance:**
 - **Flood** beats *persistence* (the standard no-model hydrological forecast,
-  p ≈ 0.004) and *seasonal climatology* (p ≈ 0.004).
-- **Fire** beats the *Angström fire-danger index* — both on US (p ≈ 0.004) and on
+  p < 0.004) and *seasonal climatology* (p < 0.004).
+- **Fire** beats the *Angström fire-danger index* — both on US (p < 0.004) and on
   real Indian data (p ≈ 0.02).
 - **Earthquake** statistically matches a GMPE ground-motion attenuation baseline on
   the damage label and **beats USGS PAGER by +0.22 AUC** on the felt-report label.
@@ -253,6 +263,23 @@ failure analysis; reproduce every number with `make reproduce`.
 **Population-scale cyclone evidence (92 real storms, IBTrACS):** the system would
 have raised a cyclone alert a **median of 54 hours before landfall**, with **≥48 h
 lead for ~58%** of storms and ≥72 h for ~40%.
+
+**How wrong can the evacuation assumptions be?** The clearance, compliance and
+casualty rates are planning assumptions, not agency-calibrated numbers — so the
+fair question is whether the *recommendation* is therefore arbitrary. It is not.
+Sweeping each assumption and re-running the real decision function at every point
+(`make sensitivity`) shows the Puri ORDER recommendation survives:
+
+| Assumption | Baseline | Flips at | Margin |
+|---|---:|---:|---|
+| Fatality rate if the zone stays | 0.02 | 0.0075 | **2.7×** |
+| Road egress capacity | 8,000/h | 2,000/h | **4×** |
+| Prior false alarms (cry-wolf) | 0 | never flips (0–10) | — |
+
+The cry-wolf row needs stating carefully: the *recommendation* is insensitive,
+but the *outcome* is not — across that range expected turnout falls by roughly
+three quarters while the order stays put. An insensitive decision is not an
+insensitive result.
 
 **Operational decision quality** is reported per hazard at the dispatch threshold
 (POD/FAR/CSI), with calibration repaired by isotonic recalibration (e.g.,
