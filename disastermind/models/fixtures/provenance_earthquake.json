@@ -1,0 +1,128 @@
+{
+  "_about": "Offline demo fixture: one earthquake reported by three real agencies (USGS, India NCS, EMSC) who genuinely disagree on magnitude. Every reconciliation case is exercised in arrival order. No network, fixed values, deterministic.",
+  "incident_id": "eq-2026-0822-puri",
+  "observations": [
+    {
+      "step": "t0",
+      "source": "usgs",
+      "source_event_id": "us7000abcd",
+      "observed_at": "2026-08-22T10:00:00+00:00",
+      "received_at": "2026-08-22T10:02:00+00:00",
+      "payload": {
+        "magnitude": 5.4,
+        "depth_km": 10.0,
+        "lat": 19.8,
+        "lon": 85.9,
+        "place": "offshore Puri, Odisha"
+      },
+      "note": "initial USGS solution"
+    },
+    {
+      "step": "t1",
+      "source": "usgs",
+      "source_event_id": "us7000abcd",
+      "observed_at": "2026-08-22T10:00:00+00:00",
+      "received_at": "2026-08-22T10:05:00+00:00",
+      "payload": {
+        "magnitude": 5.4,
+        "depth_km": 10.0,
+        "lat": 19.8,
+        "lon": 85.9,
+        "place": "offshore Puri, Odisha"
+      },
+      "note": "DUPLICATE \u2014 identical content redelivered"
+    },
+    {
+      "step": "t2",
+      "source": "india_ncs",
+      "source_event_id": "ncs-2026-1183",
+      "observed_at": "2026-08-22T10:10:00+00:00",
+      "received_at": "2026-08-22T10:12:00+00:00",
+      "payload": {
+        "magnitude": 5.6,
+        "lat": 19.82,
+        "lon": 85.88
+      },
+      "note": "CONFLICT \u2014 NCS regional network reads higher than USGS teleseismic"
+    },
+    {
+      "step": "t3",
+      "source": "usgs",
+      "source_event_id": "us7000abcd-r2",
+      "observed_at": "2026-08-22T10:10:00+00:00",
+      "received_at": "2026-08-22T10:21:00+00:00",
+      "payload": {
+        "depth_km": 13.0
+      },
+      "note": "PARTIAL \u2014 depth only; magnitude and location carry forward"
+    },
+    {
+      "step": "t4",
+      "source": "emsc",
+      "source_event_id": "emsc-991204",
+      "observed_at": "2026-08-22T10:10:00+00:00",
+      "received_at": "2026-08-22T10:30:00+00:00",
+      "payload": {
+        "magnitude": 5.6
+      },
+      "note": "THREE-WAY \u2014 EMSC corroborates NCS against USGS"
+    },
+    {
+      "step": "t5",
+      "source": "usgs",
+      "source_event_id": "us7000abcd-r3",
+      "observed_at": "2026-08-22T10:40:00+00:00",
+      "received_at": "2026-08-22T10:41:00+00:00",
+      "payload": {
+        "magnitude": 6.2
+      },
+      "note": "CENTREPIECE \u2014 upward revision crosses the dispatch threshold"
+    },
+    {
+      "step": "t6",
+      "source": "emsc",
+      "source_event_id": "emsc-991204-late",
+      "observed_at": "2026-08-22T10:05:00+00:00",
+      "received_at": "2026-08-22T10:50:00+00:00",
+      "payload": {
+        "magnitude": 5.9
+      },
+      "note": "OUT-OF-ORDER \u2014 observed early, delivered late"
+    },
+    {
+      "step": "t7",
+      "source": "usgs",
+      "source_event_id": "us7000abcd-w",
+      "observed_at": "2026-08-22T11:00:00+00:00",
+      "received_at": "2026-08-22T11:01:00+00:00",
+      "payload": {
+        "retracted": [
+          "magnitude"
+        ]
+      },
+      "note": "RETRACTION \u2014 USGS withdraws its magnitude"
+    },
+    {
+      "step": "t8a",
+      "source": "emsc",
+      "source_event_id": "emsc-991204-r2",
+      "observed_at": "2026-08-22T11:10:00+00:00",
+      "received_at": "2026-08-22T11:11:00+00:00",
+      "payload": {
+        "magnitude": 6.4
+      },
+      "note": "FAILURE CASE (1/2) \u2014 deadlock candidate"
+    },
+    {
+      "step": "t8b",
+      "source": "india_ncs",
+      "source_event_id": "ncs-2026-1183-r2",
+      "observed_at": "2026-08-22T11:10:00+00:00",
+      "received_at": "2026-08-22T11:12:00+00:00",
+      "payload": {
+        "magnitude": 5.8
+      },
+      "note": "FAILURE CASE (2/2) \u2014 equal authority, equal time, equal corroboration"
+    }
+  ]
+}

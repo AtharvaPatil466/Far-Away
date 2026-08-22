@@ -215,6 +215,51 @@ four modules — **Commander Dashboard**, **Escalation**, **Field Ops**, and
 **Post-Incident Report** — talking to the platform API (configurable base URL),
 with live status, override controls, SHAP explanations, and PDF report export.
 
+### 4.8 Conflicting sources and change history
+
+Agencies disagree. USGS and India's NCS routinely publish different magnitudes
+for the same earthquake — different networks, different scales, neither wrong.
+A warning system that silently picks one is lying by omission; one that shows
+both without deciding is useless to a commander. DisasterMind does both.
+
+Every inbound report is stored as an immutable **Observation** (`source`,
+`source_event_id`, `observed_at`, `received_at`, payload, content hash). The
+canonical incident is **derived** from that set by a documented policy, never
+edited in place, and is reconstructible by replaying the observations from
+scratch — which is a test, not a claim.
+
+`observed_at` and `received_at` are kept separate, and selection uses only
+`observed_at`. Canonical state is therefore a pure function of the observation
+*set*, so **arrival order cannot change the answer** and a slow network cannot
+rewrite history.
+
+**Policy**, applied per field: authority → recency → corroboration. If all three
+tie the field is **UNRESOLVED** — no winner is invented, both candidates stay
+visible, and on consequence-bearing fields the more cautious value carries
+forward so the recommendation errs toward safety pending a human decision.
+Conflicts are never collapsed: losing candidates are retained and flagged.
+Print the whole policy with `make policy`.
+
+**Meaningful** is a rule, not a mood. A revision is MEANINGFUL if it crosses a
+dispatch threshold, changes the capstone recommendation, or exceeds the field's
+tolerance; everything else is MINOR. Nothing is discarded — minor revisions are
+stored, chained and inspectable. Each revision carries the sentence that
+classified it (*"crossed the magnitude 5.5 dispatch threshold (5.4 → 5.6)"*,
+*"sub-tolerance jitter, depth_km 3 < 5"*), and that sentence is shown in the UI.
+
+**Inspection** is a primary console view (PROVENANCE), not a debug panel:
+timeline with meaningful rows dominant and minor rows recessive, a
+meaningful-only toggle that reports how many revisions it suppressed and why,
+per-revision before/after diffs with the causing observation, and a per-field
+WHY panel showing every source's value and the flagged alternatives. API:
+`/incidents/{id}/history`, `/observations`, `/field/{name}`.
+
+Revisions append to the **existing** hash chain — one chain, no second store —
+so `make verify-audit` covers change history and tampering with a revision fails
+the same verification that protects every other decision.
+
+Full write-up: [`RECONCILIATION.md`](RECONCILIATION.md).
+
 ### 4.9 Language-model layer — what is generated, what is not
 
 The platform contains a narration layer. It is disclosed here because a reader is

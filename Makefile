@@ -86,6 +86,12 @@ review-packet: ## Build the self-contained external-review packet (./review_pack
 SHADOW_JOURNAL ?= shadow/usgs_season.jsonl
 shadow-tick: ## Pull the live USGS feed and journal new predictions + settle outcomes.
 	$(PYTHON) -m disastermind.live.usgs_shadow --journal $(SHADOW_JOURNAL) --mode both
+policy: ## Print the active reconciliation policy (tolerances, ranking, thresholds).
+	$(PYTHON) -c "from disastermind.models.reconcile_policy import render; print(render())"
+
+provenance: ## Recompute the incident provenance view the console reads.
+	$(PYTHON) tools/export_provenance.py
+
 benchmark: ## Measure coordination throughput + latency percentiles (reporting, not a gate).
 	$(PYTHON) tools/benchmark_report.py
 
