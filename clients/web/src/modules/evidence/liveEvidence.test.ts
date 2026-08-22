@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { cacheLiveEvidence, readCachedLiveEvidence, verifyLiveEvidence } from './liveEvidence'
+import { cacheLiveEvidence, fetchLiveEvidence, readCachedLiveEvidence, verifyLiveEvidence } from './liveEvidence'
 import type { LiveEvidenceSnapshot } from './types'
 
 const payload = { id: 'eq-1', probability: 0.2 }
@@ -61,5 +61,52 @@ describe('live evidence cache and verification', () => {
   it('tolerates unavailable browser storage', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => { throw new Error('blocked') })
     expect(() => cacheLiveEvidence({} as LiveEvidenceSnapshot)).not.toThrow()
+  })
+})
+
+describe('live evidence cache resilience', () => {
+  beforeEach(() => localStorage.clear())
+
+  const CACHE_KEY = 'disastermind.live-evidence.v1'
+
+  it('keeps valid cached data when a refresh fails', async () => {
+    const live = await snapshot()
+    cacheLiveEvidence(live, new Date('2026-08-21T10:01:00Z'))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('boom', { status: 500 }))
+    await expect(fetchLiveEvidence()).rejects.toThrow('HTTP 500')
+    expect(readCachedLiveEvidence()?.snapshot.records[0].hash).toBe(live.records[0].hash)
+    expect(readCachedLiveEvidence()?.cached_at).toBe('2026-08-21T10:01:00.000Z')
+  })
+
+  it('does not replace cached data with an invalid payload', async () => {
+    const live = await snapshot()
+    cacheLiveEvidence(live)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{"schema_version":2}', { status: 200 }))
+    await expect(fetchLiveEvidence()).rejects.toThrow('invalid snapshot')
+    expect(readCachedLiveEvidence()?.snapshot.genesis).toBe('shadow-genesis')
+  })
+
+  it('preserves provenance fields through the storage round-trip', async () => {
+    const live = await snapshot()
+    cacheLiveEvidence(live)
+    const restored = readCachedLiveEvidence()?.snapshot
+    expect(restored?.classification).toBe('LIVE')
+    expect(restored?.chain_verified).toBe(true)
+    expect(restored?.source.name).toBe('USGS')
+    expect(restored?.source.feed).toBe('https://example.test')
+    expect(restored?.records[0].previous_hash).toBe('shadow-genesis')
+  })
+
+  it('supports removeItem and clear through the storage contract', async () => {
+    const live = await snapshot()
+    cacheLiveEvidence(live)
+    localStorage.removeItem(CACHE_KEY)
+    expect(localStorage.getItem(CACHE_KEY)).toBeNull()
+    expect(readCachedLiveEvidence()).toBeNull()
+    cacheLiveEvidence(live)
+    expect(localStorage.key(0)).toBe(CACHE_KEY)
+    expect(localStorage.length).toBe(1)
+    localStorage.clear()
+    expect(readCachedLiveEvidence()).toBeNull()
   })
 })
