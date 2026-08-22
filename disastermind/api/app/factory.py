@@ -223,6 +223,13 @@ def create_app(
         app.add_api_route(path, handler, methods=methods)
         app.add_api_route(_API_V1 + path, handler, methods=methods, include_in_schema=False)
 
+    # ------------------------------------------------------- provenance views
+    # Incident history, raw observations and per-field provenance. Handlers live
+    # in ``history_routes`` and compute from the observation store per request.
+    from .history_routes import register as _register_provenance
+
+    _register_provenance(app, lambda path, handler, methods: _route(path, handler, methods=methods))
+
     # ------------------------------------------------ validation: cyclone backtest
     _cyclone_cache: dict[str, Any] = {}
 
