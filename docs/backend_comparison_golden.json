@@ -1,0 +1,50 @@
+{
+  "earthquake": {
+    "logistic": {
+      "auc": 0.9372,
+      "brier": 0.0107,
+      "ece": 0.002
+    },
+    "xgboost": {
+      "auc": 0.9499,
+      "brier": 0.0093,
+      "ece": 0.0035
+    }
+  },
+  "flood": {
+    "logistic": {
+      "auc": 0.9437,
+      "brier": 0.0278,
+      "ece": 0.0037
+    },
+    "xgboost": {
+      "auc": 0.9433,
+      "brier": 0.0266,
+      "ece": 0.0074
+    }
+  },
+  "fire": {
+    "logistic": {
+      "auc": 0.8374,
+      "brier": 0.1205,
+      "ece": 0.0227
+    },
+    "xgboost": {
+      "auc": 0.8325,
+      "brier": 0.1226,
+      "ece": 0.0269
+    }
+  },
+  "fire-india": {
+    "logistic": {
+      "auc": 0.8538,
+      "brier": 0.1526,
+      "ece": 0.0151
+    },
+    "xgboost": {
+      "auc": 0.858,
+      "brier": 0.1519,
+      "ece": 0.0175
+    }
+  }
+}

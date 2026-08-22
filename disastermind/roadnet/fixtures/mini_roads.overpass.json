@@ -1,0 +1,36 @@
+{
+  "version": 0.6,
+  "generator": "DisasterMind committed fixture (not a live Overpass response)",
+  "elements": [
+    {"type": "node", "id": 1, "lat": 19.8000, "lon": 85.8000, "tags": {"junction": "yes"}},
+    {"type": "node", "id": 2, "lat": 19.8000, "lon": 85.8100, "tags": {}},
+    {"type": "node", "id": 3, "lat": 19.8000, "lon": 85.8200, "tags": {}},
+    {"type": "node", "id": 4, "lat": 19.8100, "lon": 85.8000, "tags": {}},
+    {"type": "node", "id": 5, "lat": 19.8100, "lon": 85.8200, "tags": {}},
+
+    {
+      "type": "way",
+      "id": 1001,
+      "nodes": [1, 2, 3],
+      "tags": {"highway": "primary", "name": "Coastal Road"}
+    },
+    {
+      "type": "way",
+      "id": 1002,
+      "nodes": [1, 4],
+      "tags": {"highway": "secondary", "name": "North Link"}
+    },
+    {
+      "type": "way",
+      "id": 1003,
+      "nodes": [4, 5],
+      "tags": {"highway": "secondary", "name": "Ridge Road"}
+    },
+    {
+      "type": "way",
+      "id": 1004,
+      "nodes": [5, 3],
+      "tags": {"highway": "secondary", "name": "Harbour Approach"}
+    }
+  ]
+}
