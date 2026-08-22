@@ -59,7 +59,7 @@ def incident_history(incident_id: str, meaningful_only: bool = False) -> dict[st
     if store is None:
         return {"error": "unknown incident", "incident_id": incident_id}
     revisions = build_history(incident_id, store.all())
-    totals = counts(revisions)
+    totals = counts(revisions, store)
     shown = [r for r in revisions if not meaningful_only or r.classification == "MEANINGFUL"]
     return {
         "incident_id": incident_id,

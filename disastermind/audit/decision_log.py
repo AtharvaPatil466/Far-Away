@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import os
+import threading
 from typing import Any
 
 from ..core.contracts import Message
@@ -35,6 +36,13 @@ class DecisionLogger:
     def __init__(self, path: str = "./audit.jsonl", elasticsearch_url: str = "") -> None:
         self.path = path
         self.elasticsearch_url = elasticsearch_url
+        # Appending is read-modify-write: read the tip, hash against it, persist,
+        # advance. Two threads interleaving there produce two records claiming
+        # the same _prev — a permanent fork that verify_chain can never accept.
+        # Real writers exist (the API's loop-driver thread, the Kafka consumer
+        # thread), so this is a live race, not a theoretical one. RLock because
+        # truncate_torn_tail re-enters via _load_tip.
+        self._lock = threading.RLock()
         self._prev_hash = self._load_tip()
         self._es = self._connect_es() if elasticsearch_url else None
 
@@ -45,6 +53,7 @@ class DecisionLogger:
         inst = cls.__new__(cls)
         inst.path = ""
         inst.elasticsearch_url = ""
+        inst._lock = threading.RLock()
         inst._prev_hash = GENESIS
         inst._es = None
         inst.memory: list[dict] = []
@@ -113,6 +122,10 @@ class DecisionLogger:
         edited this" must not look the same to an operator, so the log keeps
         failing verification until a human decides to repair it.
         """
+        with self._lock:
+            return self._truncate_torn_tail_locked()
+
+    def _truncate_torn_tail_locked(self) -> int:
         torn = self.torn_lines()
         if not torn:
             return 0
@@ -150,10 +163,14 @@ class DecisionLogger:
     def record(self, message: Message) -> dict[str, Any]:
         rec = message.to_dict()
         body = json.dumps(rec, sort_keys=True, separators=(",", ":"))
-        rec["_prev"] = self._prev_hash
-        rec["_hash"] = self._hash(self._prev_hash, body)
-        self._persist(rec)
-        self._prev_hash = rec["_hash"]
+        with self._lock:
+            rec["_prev"] = self._prev_hash
+            rec["_hash"] = self._hash(self._prev_hash, body)
+            # Persist BEFORE advancing: _persist raises on write failure, so a
+            # failed append leaves the tip where it was rather than stranding
+            # the chain on a hash that was never written.
+            self._persist(rec)
+            self._prev_hash = rec["_hash"]
         return rec
 
     def log_prediction(
@@ -169,10 +186,11 @@ class DecisionLogger:
             "incident_id": incident_id,
         }
         body = json.dumps(rec, sort_keys=True, separators=(",", ":"))
-        rec["_prev"] = self._prev_hash
-        rec["_hash"] = self._hash(self._prev_hash, body)
-        self._persist(rec)
-        self._prev_hash = rec["_hash"]
+        with self._lock:
+            rec["_prev"] = self._prev_hash
+            rec["_hash"] = self._hash(self._prev_hash, body)
+            self._persist(rec)
+            self._prev_hash = rec["_hash"]
         return rec
 
     def _persist(self, rec: dict) -> None:

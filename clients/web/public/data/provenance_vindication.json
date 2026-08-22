@@ -1,0 +1,277 @@
+{
+  "canonical": {
+    "contested_fields": [
+      "depth_km"
+    ],
+    "fields": {
+      "depth_km": {
+        "alternatives": [
+          {
+            "beyond_tolerance": true,
+            "delta": 32.0,
+            "obs_id": "obs-001",
+            "observed_at": "2026-08-22T14:00:00+00:00",
+            "source": "usgs",
+            "value": 10.0
+          },
+          {
+            "beyond_tolerance": false,
+            "delta": 2.0,
+            "obs_id": "obs-003",
+            "observed_at": "2026-08-22T14:12:00+00:00",
+            "source": "emsc",
+            "value": 44.0
+          },
+          {
+            "beyond_tolerance": false,
+            "delta": 3.0,
+            "obs_id": "obs-002",
+            "observed_at": "2026-08-22T14:06:00+00:00",
+            "source": "india_ncs",
+            "value": 45.0
+          }
+        ],
+        "contested": true,
+        "corroboration": 3,
+        "field": "depth_km",
+        "obs_id": "obs-004",
+        "observed_at": "2026-08-22T14:30:00+00:00",
+        "reason": "equal authority; usgs observed later (2026-08-22T14:30:00+00:00 > 2026-08-22T14:00:00+00:00)",
+        "rule": "recency",
+        "source": "usgs",
+        "unresolved": false,
+        "value": 42.0
+      },
+      "lat": {
+        "alternatives": [],
+        "contested": false,
+        "corroboration": 1,
+        "field": "lat",
+        "obs_id": "obs-001",
+        "observed_at": "2026-08-22T14:00:00+00:00",
+        "reason": "only usgs reported lat",
+        "rule": "authority",
+        "source": "usgs",
+        "unresolved": false,
+        "value": 19.75
+      },
+      "lon": {
+        "alternatives": [],
+        "contested": false,
+        "corroboration": 1,
+        "field": "lon",
+        "obs_id": "obs-001",
+        "observed_at": "2026-08-22T14:00:00+00:00",
+        "reason": "only usgs reported lon",
+        "rule": "authority",
+        "source": "usgs",
+        "unresolved": false,
+        "value": 85.95
+      },
+      "magnitude": {
+        "alternatives": [],
+        "contested": false,
+        "corroboration": 1,
+        "field": "magnitude",
+        "obs_id": "obs-001",
+        "observed_at": "2026-08-22T14:00:00+00:00",
+        "reason": "only usgs reported magnitude",
+        "rule": "authority",
+        "source": "usgs",
+        "unresolved": false,
+        "value": 6.1
+      }
+    },
+    "incident_id": "eq-2026-0822-vindication",
+    "p_event": 0.47,
+    "recommendation": "ORDER_BY_DEADLINE",
+    "unresolved_fields": []
+  },
+  "counts": {
+    "by_kind": {
+      "CONFLICT": 3,
+      "UPDATE": 1
+    },
+    "duplicates_suppressed": 0,
+    "meaningful": 2,
+    "minor": 2,
+    "no_op": 0,
+    "observations": 4,
+    "reports_received": 4,
+    "suppressed_by_toggle": 2,
+    "total": 4
+  },
+  "incident_id": "eq-2026-0822-vindication",
+  "label": "Overruled \u2014 and wrong",
+  "observations": [
+    {
+      "content_hash": "f1be26dfc06436ac9d432b7873aad5dab79134a7e8bee445ddab73bafa856875",
+      "is_retraction": false,
+      "obs_id": "obs-001",
+      "observed_at": "2026-08-22T14:00:00+00:00",
+      "payload": {
+        "depth_km": 10.0,
+        "lat": 19.75,
+        "lon": 85.95,
+        "magnitude": 6.1
+      },
+      "received_at": "2026-08-22T14:02:00+00:00",
+      "source": "usgs",
+      "source_event_id": "us8000wxyz"
+    },
+    {
+      "content_hash": "2549784e5631dface6af1d0fd96dc559b76247f0f17a1951d8b53f60556bdf62",
+      "is_retraction": false,
+      "obs_id": "obs-002",
+      "observed_at": "2026-08-22T14:06:00+00:00",
+      "payload": {
+        "depth_km": 45.0
+      },
+      "received_at": "2026-08-22T14:08:00+00:00",
+      "source": "india_ncs",
+      "source_event_id": "ncs-2026-1207"
+    },
+    {
+      "content_hash": "dc786f3845872ad8a1b23bfc96586e493f3b58a01fd75c5f56ae1f995ee25b20",
+      "is_retraction": false,
+      "obs_id": "obs-003",
+      "observed_at": "2026-08-22T14:12:00+00:00",
+      "payload": {
+        "depth_km": 44.0
+      },
+      "received_at": "2026-08-22T14:14:00+00:00",
+      "source": "emsc",
+      "source_event_id": "emsc-993318"
+    },
+    {
+      "content_hash": "6c0d9ecd2e5914888649c30377590fb241f3927b8ea9db2212bcaa63a462c405",
+      "is_retraction": false,
+      "obs_id": "obs-004",
+      "observed_at": "2026-08-22T14:30:00+00:00",
+      "payload": {
+        "depth_km": 42.0
+      },
+      "received_at": "2026-08-22T14:31:00+00:00",
+      "source": "usgs",
+      "source_event_id": "us8000wxyz-r2"
+    }
+  ],
+  "policy": "DisasterMind \u2014 reconciliation policy (active values)\n==============================================================\n\nPRECEDENCE, applied per field, in order:\n  1. authority      highest-ranked source for that field wins\n  2. recency        latest observed_at (never received_at)\n  3. corroboration  most independent sources reporting the value\n  ~. UNRESOLVED     all three tie -> no winner is invented\n\nSOURCE AUTHORITY (higher wins)\n  magnitude    india_ncs=2, usgs=2, emsc=2\n  depth_km     usgs=3, emsc=2, india_ncs=1\n  lat          usgs=3, emsc=2, india_ncs=1\n  lon          usgs=3, emsc=2, india_ncs=1\n  place        india_ncs=3, usgs=2, emsc=1\n\nFIELD TOLERANCE (at or below = agreement, not news)\n  magnitude    +/- 0.1\n  depth_km     +/- 5.0\n  lat          +/- 0.1\n  lon          +/- 0.1\n\nDUPLICATE MATCH (all must hold, absent a shared source_event_id)\n  time window      120.0 s\n  distance         0.5 deg\n  magnitude delta  0.5\n\nMEANINGFUL if ANY holds (else MINOR \u2014 recorded, never discarded)\n  (a) crosses a dispatch threshold:\n        magnitude  [4.5, 5.5, 6.0, 6.5, 7.0]\n        depth_km   [70.0]\n  (b) changes the capstone recommendation:\n        NO_ACTIONABLE_WARNING -> BELOW_BREAKEVEN_HOLD -> NOT_CLEARABLE_VERTICAL -> ORDER_BY_DEADLINE\n  (c) exceeds the field tolerance listed above\n\nRETRACTION\n  marker 'retracted' removes the field from canonical state;\n  the observation itself is retained and stays inspectable.",
+  "revisions": [
+    {
+      "at": "2026-08-22T14:02:00+00:00",
+      "causing_obs_id": "obs-001",
+      "changes": [
+        {
+          "after": 10.0,
+          "before": null,
+          "contested": false,
+          "field": "depth_km",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported depth_km"
+        },
+        {
+          "after": 19.75,
+          "before": null,
+          "contested": false,
+          "field": "lat",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported lat"
+        },
+        {
+          "after": 85.95,
+          "before": null,
+          "contested": false,
+          "field": "lon",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported lon"
+        },
+        {
+          "after": 6.1,
+          "before": null,
+          "contested": false,
+          "field": "magnitude",
+          "kind": "value",
+          "rule": "authority",
+          "rule_reason": "only usgs reported magnitude"
+        }
+      ],
+      "classification": "MEANINGFUL",
+      "kind": "UPDATE",
+      "reason": "first report established depth_km, lat, lon, magnitude \u2014 there was no prior value to compare against",
+      "recommendation_after": "ORDER_BY_DEADLINE",
+      "recommendation_before": "NO_ACTIONABLE_WARNING",
+      "seq": 1,
+      "source": "usgs"
+    },
+    {
+      "at": "2026-08-22T14:08:00+00:00",
+      "causing_obs_id": "obs-002",
+      "changes": [
+        {
+          "after": 10.0,
+          "before": 10.0,
+          "contested": true,
+          "field": "depth_km",
+          "kind": "dissent",
+          "rule": "authority",
+          "rule_reason": "india_ncs reported 45.0 and was OVERRULED (usgs outranks india_ncs on depth_km (authority 3 > 1)); kept visible as a flagged alternative"
+        }
+      ],
+      "classification": "MINOR",
+      "kind": "CONFLICT",
+      "reason": "depth_km unchanged \u2014 a source disagreed and was overruled. Recorded so the dissent is on the record if it is later vindicated.",
+      "recommendation_after": "ORDER_BY_DEADLINE",
+      "recommendation_before": "ORDER_BY_DEADLINE",
+      "seq": 2,
+      "source": "india_ncs"
+    },
+    {
+      "at": "2026-08-22T14:14:00+00:00",
+      "causing_obs_id": "obs-003",
+      "changes": [
+        {
+          "after": 10.0,
+          "before": 10.0,
+          "contested": true,
+          "field": "depth_km",
+          "kind": "dissent",
+          "rule": "authority",
+          "rule_reason": "emsc reported 44.0 and was OVERRULED (usgs outranks emsc on depth_km (authority 3 > 2)); kept visible as a flagged alternative"
+        }
+      ],
+      "classification": "MINOR",
+      "kind": "CONFLICT",
+      "reason": "depth_km unchanged \u2014 a source disagreed and was overruled. Recorded so the dissent is on the record if it is later vindicated.",
+      "recommendation_after": "ORDER_BY_DEADLINE",
+      "recommendation_before": "ORDER_BY_DEADLINE",
+      "seq": 3,
+      "source": "emsc"
+    },
+    {
+      "at": "2026-08-22T14:31:00+00:00",
+      "causing_obs_id": "obs-004",
+      "changes": [
+        {
+          "after": 42.0,
+          "before": 10.0,
+          "contested": true,
+          "field": "depth_km",
+          "kind": "value",
+          "rule": "recency",
+          "rule_reason": "equal authority; usgs observed later (2026-08-22T14:30:00+00:00 > 2026-08-22T14:00:00+00:00)"
+        }
+      ],
+      "classification": "MEANINGFUL",
+      "kind": "CONFLICT",
+      "reason": "depth_km moved 32, beyond its 5 tolerance",
+      "recommendation_after": "ORDER_BY_DEADLINE",
+      "recommendation_before": "ORDER_BY_DEADLINE",
+      "seq": 4,
+      "source": "usgs"
+    }
+  ]
+}

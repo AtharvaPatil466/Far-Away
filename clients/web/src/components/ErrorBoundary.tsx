@@ -2,6 +2,16 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
+  /**
+   * Render a compact inline card instead of taking over the viewport.
+   *
+   * Full-page takeover is right for an app-level failure and wrong for one row
+   * of a timeline: during a live demo a single bad record should cost that row,
+   * not the whole view. Inline boundaries let the operator keep moving.
+   */
+  inline?: boolean
+  /** What failed, so the inline card names it rather than saying "something". */
+  label?: string
 }
 
 interface State {
@@ -32,6 +42,30 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     const { error } = this.state
     if (!error) return this.props.children
+
+    if (this.props.inline) {
+      return (
+        <div
+          role="alert"
+          style={{
+            border: '1px solid currentColor', borderRadius: 4, padding: '0.5rem 0.7rem',
+            font: '0.78rem ui-monospace, monospace', opacity: 0.85,
+            display: 'flex', gap: '0.6rem', alignItems: 'baseline', flexWrap: 'wrap',
+          }}
+        >
+          <strong>⚠ {this.props.label ?? 'this item'} failed to render</strong>
+          <span style={{ opacity: 0.7 }}>{error.message}</span>
+          <button
+            type="button"
+            onClick={this.handleReset}
+            style={{ background: 'none', color: 'inherit', border: '1px solid currentColor',
+                     borderRadius: 3, padding: '0.05rem 0.4rem', cursor: 'pointer', font: 'inherit' }}
+          >
+            retry
+          </button>
+        </div>
+      )
+    }
 
     return (
       <div

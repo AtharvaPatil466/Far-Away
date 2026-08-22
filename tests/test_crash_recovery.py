@@ -30,6 +30,8 @@ import sys
 import textwrap
 import time
 
+import pytest
+
 from disastermind.audit.decision_log import DecisionLogger
 from disastermind.ml.shadow import ShadowJournal
 
@@ -200,4 +202,64 @@ def test_audit_torn_tail_is_counted_and_repairable(tmp_path):
 
     logger.log_prediction(model="m", inputs={"after": 1}, prediction={},
                           shap={}, incident_id="after")
+    assert DecisionLogger(path=path).verify_chain() is True
+
+
+def test_concurrent_writers_cannot_fork_the_chain(tmp_path):
+    """Appending is read-modify-write; unguarded it forks under real threads.
+
+    The API runs a daemon loop-driver thread and the Kafka runtime runs a
+    consumer thread, either of which can log while a request thread does. Two
+    threads reading the same tip emit two records claiming the same ``_prev``,
+    and no later verification can ever accept that file again.
+    """
+    import threading
+
+    path = str(tmp_path / "audit.jsonl")
+    logger = DecisionLogger(path=path)
+    errors: list[BaseException] = []
+    start = threading.Barrier(8)
+
+    def hammer(worker: int) -> None:
+        try:
+            start.wait()
+            for i in range(25):
+                logger.log_prediction(model="m", inputs={"w": worker, "i": i},
+                                      prediction={}, shap={}, incident_id=f"w{worker}")
+        except BaseException as exc:  # noqa: BLE001 - surfaced via `errors`
+            errors.append(exc)
+
+    threads = [threading.Thread(target=hammer, args=(w,)) for w in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"writer raised: {errors[:1]}"
+    written = [ln for ln in open(path, encoding="utf-8") if ln.strip()]
+    assert len(written) == 200, f"lost or duplicated records: {len(written)}"
+    assert DecisionLogger(path=path).verify_chain() is True, "the chain forked"
+
+
+def test_a_failed_write_does_not_advance_the_tip(tmp_path, monkeypatch):
+    """A write that fails must leave the tip where it was.
+
+    Advancing first would strand the chain on a hash no file contains, so every
+    later record would link to nothing and verification would fail forever.
+    """
+    path = str(tmp_path / "audit.jsonl")
+    logger = DecisionLogger(path=path)
+    logger.log_prediction(model="m", inputs={"ok": 1}, prediction={}, shap={}, incident_id="ok")
+    tip_before = logger._prev_hash
+
+    def boom(_rec):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(logger, "_persist", boom)
+    with pytest.raises(OSError):
+        logger.log_prediction(model="m", inputs={"bad": 1}, prediction={}, shap={}, incident_id="bad")
+
+    assert logger._prev_hash == tip_before, "tip advanced despite a failed write"
+    monkeypatch.undo()
+    logger.log_prediction(model="m", inputs={"after": 1}, prediction={}, shap={}, incident_id="after")
     assert DecisionLogger(path=path).verify_chain() is True

@@ -63,3 +63,16 @@
 .prov-alt.flagged::before { content: '⚑'; }
 .prov-policy { font-family: ui-monospace, monospace; font-size: 0.68rem; white-space: pre;
   overflow-x: auto; opacity: 0.75; border-top: 1px solid currentColor; padding-top: 0.6rem; }
+
+/* the reconciliation strip — read before the timeline is */
+.prov-ledger { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.45rem;
+  font-family: ui-monospace, monospace; font-size: 0.8rem;
+  padding: 0.6rem 0.75rem; border: 1px solid currentColor; border-radius: 6px; }
+.prov-ledger strong { font-size: 1.05rem; }
+.prov-ledger .op { opacity: 0.45; }
+.prov-ledger .hot strong { text-decoration: underline; text-underline-offset: 3px; }
+.prov-ledger em { font-style: normal; opacity: 0.6; font-size: 0.72rem; }
+
+.prov-scenarios { display: flex; gap: 0.4rem; margin-left: auto; }
+.prov-scenarios .prov-count { cursor: pointer; background: none; color: inherit; }
+.prov-scenarios .prov-count.on { outline: 1px solid currentColor; }

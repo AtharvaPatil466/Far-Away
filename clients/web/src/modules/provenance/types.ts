@@ -65,7 +65,11 @@ export interface ProvenanceDoc {
     meaningful: number
     minor: number
     suppressed_by_toggle: number
+    no_op: number
     by_kind: Record<string, number>
+    reports_received: number
+    duplicates_suppressed: number
+    observations: number
   }
   canonical: {
     incident_id: string
