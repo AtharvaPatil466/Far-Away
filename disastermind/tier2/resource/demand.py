@@ -24,8 +24,8 @@ References: *The Sphere Handbook* (2018 ed.); NDMA/SDRF relief norms (India).
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Iterable
+from collections.abc import Iterable
+from dataclasses import dataclass
 
 from ...models.domain import RiskCell, VulnerabilityProfile
 

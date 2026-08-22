@@ -42,6 +42,10 @@ ignore = [
 # Tests favour readability over lint purity: allow unused imports/fixtures,
 # star-context patterns, and assert-heavy bodies.
 "tests/**" = ["B", "SIM", "F811", "E402"]
+# Standalone script: inserts the repo root into sys.path before importing
+# disastermind (run-from-checkout without install), so imports are necessarily
+# below executable statements.
+"tools/e2e_demo.py" = ["E402"]
 # Package __init__ files commonly re-export names (F401) deliberately.
 "**/__init__.py" = ["F401"]
 
