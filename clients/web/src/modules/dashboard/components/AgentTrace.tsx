@@ -12,6 +12,12 @@ export interface AgentTraceStage {
 interface AgentTraceProps {
   stages: readonly AgentTraceStage[]
   className?: string
+  /**
+   * Explicit pending-human-decision signal for the COMMAND stage. When provided,
+   * it replaces the positional inference (waiting + upstream complete); omit it
+   * to keep the demo-trace narrative behaviour unchanged.
+   */
+  humanDecisionPending?: boolean
 }
 
 const STATE_META: Record<
@@ -66,10 +72,10 @@ const DISPLAY_LABELS: Record<string, string> = {
 }
 
 /** A compact, data-driven view of the multi-agent decision pipeline. */
-export function AgentTrace({ stages, className }: AgentTraceProps) {
+export function AgentTrace({ stages, className, humanDecisionPending }: AgentTraceProps) {
   return (
-    <section className={cn('shrink-0 py-inversa-29', className)} aria-labelledby="agent-trace-title">
-      <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
+    <section className={cn('shrink-0 py-inversa-21', className)} aria-labelledby="agent-trace-title">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="font-mono text-label-sm uppercase text-on-surface-variant">Autonomous coordination path</p>
           <h2 id="agent-trace-title" className="mt-1 text-[29px] font-normal tracking-[-0.03em] text-on-surface">Agent pipeline</h2>
@@ -79,11 +85,13 @@ export function AgentTrace({ stages, className }: AgentTraceProps) {
 
       <ol className="grid grid-cols-2 gap-x-0 gap-y-7 sm:grid-cols-3 lg:grid-cols-6" aria-label="Agent processing stages">
           {stages.map((stage, index) => {
-            const commanderReviewRequired = stage.id === 'commander'
-              && stage.state === 'waiting'
+            const upstreamComplete = stage.id === 'commander'
               && stages.slice(0, index).every((priorStage) => priorStage.state === 'complete')
-            const meta = stage.id === 'commander' && stage.state === 'waiting'
-              ? commanderReviewRequired ? COMMANDER_REVIEW_META : COMMANDER_READY_META
+            const commanderWaiting = stage.id === 'commander' && stage.state === 'waiting'
+            const reviewRequired = commanderWaiting
+              && (humanDecisionPending ?? upstreamComplete)
+            const meta = commanderWaiting
+              ? reviewRequired ? COMMANDER_REVIEW_META : COMMANDER_READY_META
               : STATE_META[stage.state]
 
             return (
