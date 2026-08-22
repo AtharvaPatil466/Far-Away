@@ -168,6 +168,10 @@ class ShadowJournal:
             prev = rec["hash"]
         return True
 
+    def chain_head(self) -> str:
+        """The current tip hash -- what an external anchor attests to."""
+        return self._last_hash()
+
     def verify_monotonic(self) -> bool:
         """True iff ``committed_at`` never goes backwards.
 

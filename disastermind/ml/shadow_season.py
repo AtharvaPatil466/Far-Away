@@ -29,6 +29,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from .registry import get_model
+from .anchor import DEFAULT_RECEIPT, anchor_status, write_receipt
 from .shadow import ShadowJournal, export_for_review, freshness, score_season
 
 # Forecast horizon per hazard — how far ahead the prediction speaks, used to
@@ -131,8 +132,31 @@ def _cmd_verify(args: argparse.Namespace) -> int:
         "chain_intact": chain_ok,
         "committed_at_monotonic": monotonic,
         "freshness": freshness(journal),
+        # Offline, cached, and NOT part of the exit code: an unanchored or stale
+        # season is a weaker claim, not a corrupt one, and conference wifi must
+        # never be able to turn an integrity badge red.
+        "anchor": anchor_status(journal.chain_head(), path=args.anchor_receipt),
     }, indent=2))
     return 0 if (chain_ok and monotonic) else 1
+
+
+def _cmd_anchor(args: argparse.Namespace) -> int:
+    """Record an external attestation of the current chain head.
+
+    Called by the scheduled worker, which passes GitHub's own run id and
+    server-recorded timestamp -- values this process cannot forge.
+    """
+    journal = ShadowJournal(args.journal)
+    receipt = write_receipt(
+        args.out,
+        run_id=args.run_id,
+        url=args.url,
+        server_time=args.server_time,
+        chain_head=journal.chain_head(),
+        repo=args.repo,
+    )
+    print(json.dumps({"anchored": args.out, **receipt}, indent=2))
+    return 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -167,7 +191,17 @@ def _build_parser() -> argparse.ArgumentParser:
     e.add_argument("-o", "--out", default="", help="output path (default: stdout)")
     e.set_defaults(func=_cmd_export)
 
+    a = sub.add_parser("anchor", help="cache an external attestation of the chain head")
+    a.add_argument("--run-id", required=True)
+    a.add_argument("--url", required=True)
+    a.add_argument("--server-time", required=True, help="ISO timestamp recorded by the ANCHORING service")
+    a.add_argument("--repo", default="")
+    a.add_argument("--out", default=DEFAULT_RECEIPT)
+    a.set_defaults(func=_cmd_anchor)
+
     v = sub.add_parser("verify", help="re-verify the journal hash-chain")
+    v.add_argument("--anchor-receipt", default=DEFAULT_RECEIPT,
+                   help="cached external-anchor receipt (read offline; never fetched)")
     v.set_defaults(func=_cmd_verify)
     return p
 
