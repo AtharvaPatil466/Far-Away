@@ -39,6 +39,12 @@ class PairedComparison:
     ci_high: float
     p_value: float
     n_boot: int
+    #: True when NOT ONE resample favoured the baseline. ``p_value`` is then the
+    #: resolution limit of the bootstrap -- 1/(n_boot+1) -- not a measurement,
+    #: and must be reported as "p < x", never as "p = x". With the validation
+    #: run's B=250 that limit is 0.003984, which prints as a deceptively
+    #: precise-looking "0.0040".
+    p_at_floor: bool = False
 
     @property
     def significant(self) -> bool:
@@ -54,6 +60,7 @@ class PairedComparison:
             "delta_mean": self.delta_mean,
             "delta_ci95": [self.ci_low, self.ci_high],
             "p_value": self.p_value,
+            "p_at_floor": self.p_at_floor,
             "significant_at_5pct": self.significant,
             "n_boot": self.n_boot,
         }
@@ -110,6 +117,7 @@ def paired_bootstrap(
         ci_high=hi,
         p_value=(worse + 1) / (n_boot + 1),
         n_boot=n_boot,
+        p_at_floor=(worse == 0),
     )
 
 

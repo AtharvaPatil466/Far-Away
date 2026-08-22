@@ -107,10 +107,16 @@ Isotonic recalibration repairs badly miscalibrated raw outputs (earthquake ECE
 
 | Hazard | Baseline | Model AUC | Baseline AUC | Δ | p-value | Significant? |
 |---|---|---:|---:|---:|---:|:--:|
-| Flood | persistence | 0.945 | 0.934 | +0.011 | 0.004 | **yes** |
-| Fire (PNW) | Ångström index | 0.838 | 0.822 | +0.016 | 0.004 | **yes** |
-| Fire (India) | Ångström index | 0.855 | 0.796 | +0.059 | 0.004 | **yes** |
+| Flood | persistence | 0.945 | 0.934 | +0.011 | < 0.004 | **yes** |
+| Fire (PNW) | Ångström index | 0.838 | 0.822 | +0.016 | < 0.004 | **yes** |
+| Fire (India) | Ångström index | 0.855 | 0.796 | +0.059 | < 0.004 | **yes** |
 | Earthquake (damage label) | GMPE attenuation | 0.957 | 0.959 | −0.001 | 0.64 | **no — statistical tie** |
+
+> **On the p-values.** The paired bootstrap draws B = 250 resamples and reports
+> `p = (worse + 1) / (B + 1)`, so its smallest attainable value is 1/251 = 0.003984.
+> Every `< 0.004` above sits exactly on that floor: not one resample favoured the
+> baseline. It is a bound set by the resample count, not a measured quantity, and is
+> written as an inequality for that reason. Raising B lowers the bound.
 | Earthquake (felt-report label) | USGS PAGER | — | — | +0.22 | — | reported win |
 
 The earthquake module **does not beat** the GMPE baseline on the damage label — it
