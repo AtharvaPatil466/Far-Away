@@ -10,7 +10,14 @@ from disastermind.api.service import DashboardService
 from disastermind.audit.decision_log import AuditWriteError, DecisionLogger
 from disastermind.core.bus import InMemoryBus
 from disastermind.core.config import Settings
-from disastermind.core.contracts import EscalationTrigger, Message, MessageType, Module, Priority, Topic
+from disastermind.core.contracts import (
+    EscalationTrigger,
+    Message,
+    MessageType,
+    Module,
+    Priority,
+    Topic,
+)
 from disastermind.tier1.commander.agent import CommanderAgent
 
 
