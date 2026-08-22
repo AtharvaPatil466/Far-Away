@@ -295,3 +295,34 @@ def test_no_demo_path_opens_a_socket(monkeypatch):
     reconcile(incident_id, store.all())
     counts(history)
     render()
+
+
+def test_counts_arithmetic_is_internally_consistent():
+    """Every revision lands in exactly one classification and one kind."""
+    incident_id, store = _fixture_store()
+    revisions = build_history(incident_id, store.all())
+    totals = counts(revisions)
+
+    assert totals["total"] == len(revisions)
+    assert totals["total"] == totals["meaningful"] + totals["minor"]
+    assert totals["suppressed_by_toggle"] == totals["minor"]
+    assert sum(totals["by_kind"].values()) == totals["total"], "a kind was lost or double-counted"
+    assert totals["meaningful"] == len([r for r in revisions if r.classification == MEANINGFUL])
+
+
+def test_retraction_downgrade_is_meaningful_and_keeps_the_prior_recommendation():
+    """A withdrawal that LOWERS the recommendation is still a promotion event.
+
+    Downgrades are the easy thing to under-report — nothing got worse, so the
+    instinct is to treat it as housekeeping. But an evacuation order being
+    withdrawn is exactly what a commander must see, and the timeline has to
+    retain what it was before, or the row reads as if it had always been HOLD.
+    """
+    incident_id, store = _fixture_store()
+    revision = next(r for r in build_history(incident_id, store.all()) if r.kind == "RETRACTION")
+
+    assert revision.classification == MEANINGFUL
+    assert revision.recommendation_before == "ORDER_BY_DEADLINE"
+    assert revision.recommendation_after != revision.recommendation_before
+    assert "ORDER_BY_DEADLINE" in revision.reason, "the prior state must stay legible"
+    assert revision.changes, "the causing field change must remain visible"
