@@ -85,6 +85,12 @@ class ShadowJournal:
 
     # ------------------------------------------------------------------ writing
     def _last_hash(self) -> str:
+        """The tip to append after, recovered past any incomplete final write.
+
+        Returning _GENESIS here when the tail is torn would silently start a NEW
+        chain, severing every future record from the history before the crash --
+        which is precisely the linkage the chain exists to guarantee.
+        """
         last = _GENESIS
         for rec in self._iter_raw():
             last = rec.get("hash", last)
@@ -151,22 +157,75 @@ class ShadowJournal:
 
     # ------------------------------------------------------------------ reading
     def _iter_raw(self) -> Iterable[dict[str, Any]]:
+        """Yield parsed records; stop at the first unreadable line.
+
+        A hard kill mid-append leaves a TORN final line. Letting json.loads
+        raise here meant every reader -- including verify_chain -- crashed with
+        a JSONDecodeError instead of returning a verdict, so a power cut looked
+        exactly like a bug. Damage is surfaced through :meth:`torn_lines`, not
+        through an exception escaping a read.
+        """
         if not os.path.exists(self.path):
             return
         with open(self.path, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
-                if line:
+                if not line:
+                    continue
+                try:
                     yield json.loads(line)
+                except json.JSONDecodeError:
+                    return
+
+    def torn_lines(self) -> int:
+        """Count trailing lines that could not be parsed (incomplete writes)."""
+        if not os.path.exists(self.path):
+            return 0
+        torn = 0
+        with open(self.path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                if torn:
+                    torn += 1
+                    continue
+                try:
+                    json.loads(line)
+                except json.JSONDecodeError:
+                    torn = 1
+        return torn
 
     def verify_chain(self) -> bool:
-        """True iff every line's hash matches the recomputed chain (no edits)."""
+        """True iff every line's hash matches the recomputed chain (no edits).
+
+        A torn tail returns False rather than raising: the file as it stands
+        cannot be attested to. Repair it deliberately with :meth:`truncate_torn_tail`
+        -- never silently, since "the last write did not finish" and "someone
+        edited this" must not look the same to an operator.
+        """
         prev = _GENESIS
         for rec in self._iter_raw():
             if rec.get("hash") != _chain_hash(prev, rec.get("payload", {})):
                 return False
             prev = rec["hash"]
-        return True
+        return self.torn_lines() == 0
+
+    def truncate_torn_tail(self) -> int:
+        """Drop trailing unparseable lines. Returns how many were removed.
+
+        An incomplete write is not a record -- nothing is lost by discarding it,
+        and the chain up to that point stays intact and verifiable.
+        """
+        torn = self.torn_lines()
+        if not torn:
+            return 0
+        keep = [json.dumps(rec, sort_keys=True, separators=(",", ":"))
+                for rec in self._iter_raw()]
+        with open(self.path, "w", encoding="utf-8") as fh:
+            for line in keep:
+                fh.write(line + "\n")
+        return torn
 
     def chain_head(self) -> str:
         """The current tip hash -- what an external anchor attests to."""
