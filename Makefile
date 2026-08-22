@@ -86,6 +86,9 @@ review-packet: ## Build the self-contained external-review packet (./review_pack
 SHADOW_JOURNAL ?= shadow/usgs_season.jsonl
 shadow-tick: ## Pull the live USGS feed and journal new predictions + settle outcomes.
 	$(PYTHON) -m disastermind.live.usgs_shadow --journal $(SHADOW_JOURNAL) --mode both
+sensitivity: ## Regenerate the evacuation sensitivity sweep the console chart reads.
+	$(PYTHON) tools/export_sensitivity.py
+
 ledger: ## Regenerate the console ledger snapshot the audit footer reads.
 	$(PYTHON) -m disastermind.ml.shadow_season --journal $(SHADOW_JOURNAL) ledger -o clients/web/public/data/ledger.json
 

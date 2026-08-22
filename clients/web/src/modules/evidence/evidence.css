@@ -218,3 +218,26 @@
 @media (max-width: 900px) {
   .limits-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- sensitivity sweep ------------------------------------------------- */
+.sensitivity { display: flex; flex-direction: column; gap: 1.25rem; }
+.sensitivity > header h3 { margin: 0 0 0.25rem; }
+.sensitivity > header p { margin: 0; opacity: 0.75; max-width: 60ch; }
+.sensitivity-sweep h4 {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0 0 0.25rem; font-size: 0.9rem; font-weight: 600;
+}
+.sensitivity-sweep .unit { font-weight: 400; opacity: 0.6; }
+.sensitivity-sweep .tag {
+  margin-left: auto; padding: 0.1rem 0.5rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em;
+  border: 1px solid currentColor;
+}
+/* A flip is information, not an alarm: it tells the operator how much slack
+   they have. Neither state is styled as an error. */
+.tag-flip { opacity: 0.9; }
+.tag-flat { opacity: 0.55; }
+.sensitivity-note {
+  border-left: 2px solid currentColor; padding-left: 0.75rem;
+  opacity: 0.7; font-size: 0.85rem; max-width: 68ch;
+}
