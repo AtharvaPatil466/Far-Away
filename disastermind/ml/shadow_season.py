@@ -25,11 +25,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
+from .anchor import DEFAULT_RECEIPT, anchor_status, write_receipt
 from .registry import get_model
-from .shadow import ShadowJournal, export_for_review, score_season
+from .shadow import ShadowJournal, export_for_review, freshness, score_season
 
 # Forecast horizon per hazard — how far ahead the prediction speaks, used to
 # stamp ``window_end``. Earthquake is rapid impact assessment (no lead horizon).
@@ -115,9 +117,82 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 
 def _cmd_verify(args: argparse.Namespace) -> int:
-    ok = ShadowJournal(args.journal).verify_chain()
-    print(json.dumps({"journal": args.journal, "chain_intact": ok}, indent=2))
-    return 0 if ok else 1
+    """Report each integrity property SEPARATELY.
+
+    A re-hashed forgery, a clock that went backwards, and a cron that stopped
+    are three different failures with three different remedies. Collapsing them
+    into one boolean tells an operator nothing about which one happened -- and
+    makes a merely-stale season look like a tampered one. Only the first two
+    are integrity failures; staleness is reported, not failed.
+    """
+    journal = ShadowJournal(args.journal)
+    chain_ok = journal.verify_chain()
+    monotonic = journal.verify_monotonic()
+    print(json.dumps({
+        "journal": args.journal,
+        "chain_intact": chain_ok,
+        "committed_at_monotonic": monotonic,
+        "freshness": freshness(journal),
+        # Offline, cached, and NOT part of the exit code: an unanchored or stale
+        # season is a weaker claim, not a corrupt one, and conference wifi must
+        # never be able to turn an integrity badge red.
+        "anchor": anchor_status(journal.chain_head(), path=args.anchor_receipt),
+    }, indent=2))
+    return 0 if (chain_ok and monotonic) else 1
+
+
+def _cmd_anchor(args: argparse.Namespace) -> int:
+    """Record an external attestation of the current chain head.
+
+    Called by the scheduled worker, which passes GitHub's own run id and
+    server-recorded timestamp -- values this process cannot forge.
+    """
+    journal = ShadowJournal(args.journal)
+    receipt = write_receipt(
+        args.out,
+        run_id=args.run_id,
+        url=args.url,
+        server_time=args.server_time,
+        chain_head=journal.chain_head(),
+        repo=args.repo,
+    )
+    print(json.dumps({"anchored": args.out, **receipt}, indent=2))
+    return 0
+
+
+def build_ledger(journal: ShadowJournal, *, anchor_receipt: str = DEFAULT_RECEIPT) -> dict:
+    """One flat summary of everything the console footer must state.
+
+    Assembled HERE rather than in the UI so the three counters can never drift
+    apart from the checks that produce them: a footer computing its own
+    "verified" from stale props is exactly how a dashboard ends up lying.
+    """
+    card = score_season(journal)
+    return {
+        "settled": card["n_resolved"],
+        "pending": card["n_unresolved"],
+        "predictions": card["n_predictions"],
+        "scoreable": card.get("scoreable", False),
+        "reason": card.get("reason", ""),
+        "chain_intact": journal.verify_chain(),
+        "monotonic": journal.verify_monotonic(),
+        "freshness": freshness(journal),
+        "anchor": anchor_status(journal.chain_head(), path=anchor_receipt),
+    }
+
+
+def _cmd_ledger(args: argparse.Namespace) -> int:
+    """Emit the console-facing ledger summary (static JSON, no server needed)."""
+    ledger = build_ledger(ShadowJournal(args.journal), anchor_receipt=args.anchor_receipt)
+    text = json.dumps(ledger, indent=2, sort_keys=True) + "\n"
+    if args.out:
+        os.makedirs(os.path.dirname(os.path.abspath(args.out)) or ".", exist_ok=True)
+        with open(args.out, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        print(f"wrote ledger -> {args.out}")
+    else:
+        print(text, end="")
+    return 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -152,7 +227,22 @@ def _build_parser() -> argparse.ArgumentParser:
     e.add_argument("-o", "--out", default="", help="output path (default: stdout)")
     e.set_defaults(func=_cmd_export)
 
+    a = sub.add_parser("anchor", help="cache an external attestation of the chain head")
+    a.add_argument("--run-id", required=True)
+    a.add_argument("--url", required=True)
+    a.add_argument("--server-time", required=True, help="ISO timestamp recorded by the ANCHORING service")
+    a.add_argument("--repo", default="")
+    a.add_argument("--out", default=DEFAULT_RECEIPT)
+    a.set_defaults(func=_cmd_anchor)
+
+    lg = sub.add_parser("ledger", help="emit the console ledger summary as JSON")
+    lg.add_argument("--anchor-receipt", default=DEFAULT_RECEIPT)
+    lg.add_argument("-o", "--out", default="", help="output path (default: stdout)")
+    lg.set_defaults(func=_cmd_ledger)
+
     v = sub.add_parser("verify", help="re-verify the journal hash-chain")
+    v.add_argument("--anchor-receipt", default=DEFAULT_RECEIPT,
+                   help="cached external-anchor receipt (read offline; never fetched)")
     v.set_defaults(func=_cmd_verify)
     return p
 

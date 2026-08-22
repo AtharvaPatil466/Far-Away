@@ -29,6 +29,7 @@ Pure, deterministic, stdlib-only. No wall-clock, no global RNG.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from .risk_trajectory import RiskTrajectory, actionable_lead_hours
@@ -95,6 +96,13 @@ def estimate_clearance(
     last_mile_hours: float = 0.75,
 ) -> ClearanceEstimate:
     """Estimate hours to clear (empty) the zone. All terms explicit."""
+    # A negative or non-finite population previously produced a plausible-looking
+    # clearance time (the fixed overheads alone), which would read downstream as
+    # "this zone clears in 4.75 h" rather than "this input is broken".
+    if not math.isfinite(population) or population < 0:
+        raise ValueError(f"population must be finite and non-negative, got {population!r}")
+    if not math.isfinite(egress_capacity_pph):
+        raise ValueError(f"egress capacity must be finite, got {egress_capacity_pph!r}")
     demand = population * participation
     egress_hours = demand / egress_capacity_pph if egress_capacity_pph > 0 else float("inf")
     clearance = mobilization_hours + egress_hours + last_mile_hours

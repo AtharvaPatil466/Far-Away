@@ -31,6 +31,7 @@ absolute counts. Pure, deterministic, stdlib-only.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 # Per-cohort evacuation-casualty rate (fraction of THIS cohort's evacuees harmed
@@ -76,10 +77,28 @@ class EvacuationTradeoff:
 
 
 def break_even_probability(evac_casualty_rate: float, stay_fatality_rate: float) -> float:
-    """P(event) at which evacuating breaks even (saved == caused)."""
-    if stay_fatality_rate <= 0:
+    """P(event) at which evacuating breaks even (saved == caused).
+
+    The result gates evacuation -- ``p_event < break_even`` means HOLD -- so it
+    MUST land in [0, 1]. Both inputs cross a trust boundary (config, calibration
+    output, model), and unguarded they did not:
+
+      * a negative casualty rate returned a negative break-even, which no
+        ``p_event`` can fall below, silently disabling the over-evacuation guard
+        so every zone would ORDER;
+      * a NaN made the comparison always False, which is the same failure wearing
+        a different mask.
+
+    Non-finite input is treated as an unknown cost and returns 1.0 -- require
+    certainty, i.e. do not evacuate on the strength of a number we do not have.
+    """
+    if not (math.isfinite(evac_casualty_rate) and math.isfinite(stay_fatality_rate)):
         return 1.0
-    return min(1.0, evac_casualty_rate / stay_fatality_rate)
+    evac = max(0.0, evac_casualty_rate)
+    stay = max(0.0, stay_fatality_rate)
+    if stay <= 0:
+        return 1.0
+    return min(1.0, evac / stay)
 
 
 def evacuation_tradeoff(

@@ -15,11 +15,14 @@ surfaced through a browser command-and-control console.
 
 | | |
 |---|---|
-| **What it is** | A decision-support system for multi-hazard disaster early warning and coordination. |
+| **What it is** | A **decision** system for multi-hazard disaster response. Prediction is an input; the deliverable is an evacuation recommendation a commander can act on, with the authority boundary and the audit trail around it. |
+| **Headline result** | Across **92 real cyclones** (IBTrACS), the system would have raised an alert a **median of 54 hours before landfall** — ≥48 h for ~58% of storms, ≥72 h for ~40%. |
+| **Known limits (read these second)** | Earthquakes are rapid impact assessment, **not forecasting**, and statistically tie the GMPE baseline. High detection is bought with high false-alarm ratios. The evacuation layer's clearance and casualty rates are **planning assumptions, not agency-calibrated** — see §5 for how far they can be wrong before the recommendation changes, and `docs/TECHNICAL_REPORT.md` §6 for the full failure analysis. |
 | **Hazards** | Cyclone/flood, earthquake (rapid impact assessment), urban/forest fire. |
-| **Differentiator** | Every model is validated on **real historical data**, leak-free, and shown to beat the operational baselines with statistical significance — not a demo on synthetic numbers. |
-| **Design stance** | Standard-library-first and degrades gracefully; explicitly *decision-support* (a human commander holds authority) with a tamper-evident audit trail. |
-| **Scale** | ~39,000 lines of Python across 34 subsystems, a Vite + React 19 + TypeScript console (74 source modules), and a suite of ~1,110 offline, deterministic Python tests alongside a Vitest console suite. |
+| **Why the decision layer is the moat** | Plenty of models forecast hazards. What is scarce is the layer that turns a probability into *order or hold* — break-even cost analysis, clearance feasibility, cohort equity, cry-wolf compliance decay — and refuses to issue a mass-evacuation order without a human. |
+| **Design stance** | Standard-library-first and degrades gracefully; explicitly *decision-support* (a human commander holds authority) with a tamper-evident, externally anchored audit trail. |
+| **Measured performance** | ~**257 incidents/s** and ~**7,900 messages/s** through the full agent DAG single-process, p99 **68 ms** per 10-incident batch (`make benchmark`, machine-dependent). |
+| **Evidence quality** | **1,349** offline deterministic Python tests at **86% coverage**, plus a Vitest console suite. Every published number regenerates from committed fixtures via `make reproduce` (Δ = 0), and a live shadow season predicts on the real USGS feed into a hash-chained journal. |
 
 ---
 
@@ -212,6 +215,80 @@ four modules — **Commander Dashboard**, **Escalation**, **Field Ops**, and
 **Post-Incident Report** — talking to the platform API (configurable base URL),
 with live status, override controls, SHAP explanations, and PDF report export.
 
+### 4.8 Conflicting sources and change history
+
+Agencies disagree. USGS and India's NCS routinely publish different magnitudes
+for the same earthquake — different networks, different scales, neither wrong.
+A warning system that silently picks one is lying by omission; one that shows
+both without deciding is useless to a commander. DisasterMind does both.
+
+Every inbound report is stored as an immutable **Observation** (`source`,
+`source_event_id`, `observed_at`, `received_at`, payload, content hash). The
+canonical incident is **derived** from that set by a documented policy, never
+edited in place, and is reconstructible by replaying the observations from
+scratch — which is a test, not a claim.
+
+`observed_at` and `received_at` are kept separate, and selection uses only
+`observed_at`. Canonical state is therefore a pure function of the observation
+*set*, so **arrival order cannot change the answer** and a slow network cannot
+rewrite history.
+
+**Policy**, applied per field: authority → recency → corroboration. If all three
+tie the field is **UNRESOLVED** — no winner is invented, both candidates stay
+visible, and on consequence-bearing fields the more cautious value carries
+forward so the recommendation errs toward safety pending a human decision.
+Conflicts are never collapsed: losing candidates are retained and flagged.
+Print the whole policy with `make policy`.
+
+**Meaningful** is a rule, not a mood. A revision is MEANINGFUL if it crosses a
+dispatch threshold, changes the capstone recommendation, or exceeds the field's
+tolerance; everything else is MINOR. Nothing is discarded — minor revisions are
+stored, chained and inspectable. Each revision carries the sentence that
+classified it (*"crossed the magnitude 5.5 dispatch threshold (5.4 → 5.6)"*,
+*"sub-tolerance jitter, depth_km 3 < 5"*), and that sentence is shown in the UI.
+
+**Inspection** is a primary console view (PROVENANCE), not a debug panel:
+timeline with meaningful rows dominant and minor rows recessive, a
+meaningful-only toggle that reports how many revisions it suppressed and why,
+per-revision before/after diffs with the causing observation, and a per-field
+WHY panel showing every source's value and the flagged alternatives. API:
+`/incidents/{id}/history`, `/observations`, `/field/{name}`.
+
+Revisions append to the **existing** hash chain — one chain, no second store —
+so `make verify-audit` covers change history and tampering with a revision fails
+the same verification that protects every other decision.
+
+Full write-up: [`RECONCILIATION.md`](RECONCILIATION.md).
+
+### 4.9 Language-model layer — what is generated, what is not
+
+The platform contains a narration layer. It is disclosed here because a reader is
+entitled to know which text on screen was produced by a model.
+
+| Surface | What it produces | Provider |
+|---|---|---|
+| Escalation narrator | The prose brief attached to an escalation awaiting a commander | Template by default |
+| `/report/generate` | The narrative sections of a post-incident report | Template by default |
+| `/llm/generate` | Free-form narration endpoint used by the console | Template by default |
+
+**The shipped default is the deterministic template provider.** `TemplateClient`
+renders these briefs from the structured decision record using the standard
+library alone — no network, no API key, no model. An optional
+`AnthropicClient` (`pip install .[llm]`) substitutes a hosted model when a key is
+configured; if the key or SDK is absent, or the call fails, the layer falls back
+to the template. No test path touches the network.
+
+**Nothing an LLM produces enters a decision.** The narration layer is strictly
+downstream of the decision record: it reads predictions, recommendations,
+thresholds and audit entries and turns them into prose. It never feeds a
+prediction, a threshold, a routing plan, or the evacuation recommendation, and it
+holds no authority under the escalation matrix.
+
+**No published metric depends on an LLM.** Every number in §5, every figure in
+`docs/TECHNICAL_REPORT.md`, and everything `make reproduce` regenerates comes
+from the deterministic stdlib pipeline. The validation suite never constructs an
+LLM client. Removing the layer entirely would change no reported result.
+
 ---
 
 ## 5. Validation results (real data, leak-free, out-of-sample)
@@ -235,24 +312,82 @@ failure analysis; reproduce every number with `make reproduce`.
 > dependency-free model remains the shipped default. Flood risk is modelled from
 > tabular hydro-meteorological drivers.
 
-| Hazard | Data source | Out-of-sample AUC | Brier | ECE | Actionable lead (POD ≥ 80%) |
-|---|---|---:|---:|---:|---|
-| **Earthquake** | USGS catalog (2013–2017, M4.5+) | **0.937** | 0.011 | 0.002 | n/a (instantaneous) |
-| **Flood** | GloFAS-ERA5, 12 Indian basins (2010–2023) | **0.944** | 0.028 | 0.004 | **168 h (7 days)** |
-| **Fire (PNW)** | USDA FPA-FOD + ERA5 (2012–2018) | **0.837** | 0.121 | 0.023 | **72 h (3 days)** |
-| **Fire (India)** | NASA FIRMS VIIRS + ERA5 (2015–2024) | **0.855** | 0.153 | 0.015 | seasonal* |
+**Metrics, defined once.** *AUC* — probability the model ranks a real event
+above a non-event (0.5 = coin flip, 1.0 = perfect). *Brier* — mean squared error
+of the probability itself; lower is better. *ECE* — expected calibration error:
+how far "70% confident" is from being right 70% of the time. *POD* — probability
+of detection, the share of real events caught. *FAR* — false-alarm ratio, the
+share of alerts that were wrong. *CSI* — critical success index, a single score
+balancing the two.
 
-**Beats the operational incumbents, with statistical significance:**
+| Hazard | Data source | Out-of-sample AUC | vs reference baseline† | Brier | ECE | Hindcast lead (POD ≥ 80%) |
+|---|---|---:|---|---:|---:|---|
+| **Earthquake** | USGS catalog (2013–2017, M4.5+) | **0.937** | GMPE 0.959 — **statistical tie** (p = 0.64) | 0.011 | 0.002 | n/a (instantaneous) |
+| **Flood** | GloFAS-ERA5, 12 Indian basins (2010–2023) | **0.944** | persistence 0.934 — **+0.011** (p < 0.004) | 0.028 | 0.004 | **168 h (7 days)** |
+| **Fire (PNW)** | USDA FPA-FOD + ERA5 (2012–2018) | **0.837** | Ångström 0.822 — **+0.016** (p < 0.004) | 0.121 | 0.023 | **72 h (3 days)** |
+| **Fire (India)** | NASA FIRMS VIIRS + ERA5 (2015–2024) | **0.855** | Ångström 0.796 — **+0.059** (p < 0.004) | 0.153 | 0.015 | seasonal* |
+
+† **Reference, not incumbent.** Persistence and seasonal climatology are
+*no-skill* references; the Ångström index is not operationally deployed (the US
+uses NFDRS, the international standard is FWI/CFFDRS, and India's FSI issues a
+FIRMS-based rating). Clearing them shows the model learned something real — it
+does **not** show it would improve on a product an agency runs today. Comparison
+figures are computed on the model's raw probabilities, matching the uncalibrated
+baselines; the AUC column is the calibrated shipped model, so the two differ
+slightly by design (see `docs/TECHNICAL_REPORT.md` §4.1).
+
+**Beats these reference baselines, with statistical significance:**
 - **Flood** beats *persistence* (the standard no-model hydrological forecast,
-  p ≈ 0.004) and *seasonal climatology* (p ≈ 0.004).
-- **Fire** beats the *Angström fire-danger index* — both on US (p ≈ 0.004) and on
+  p < 0.004) and *seasonal climatology* (p < 0.004).
+- **Fire** beats the *Angström fire-danger index* — both on US (p < 0.004) and on
   real Indian data (p ≈ 0.02).
-- **Earthquake** statistically matches a GMPE ground-motion attenuation baseline on
-  the damage label and **beats USGS PAGER by +0.22 AUC** on the felt-report label.
+- **Earthquake** statistically matches a GMPE ground-motion attenuation reference
+  on the damage label — a tie, not a win (p = 0.64).
+
+**Unit of analysis and base rate** — FAR, CSI, bias and Brier are uninterpretable
+without these. A 0.87 false-alarm ratio at a 1.4% base rate and at a 42.6% base
+rate describe entirely different systems.
+
+| Hazard | One row = | Test rows | Test base rate |
+|---|---|---:|---:|
+| Earthquake | one M4.5+ catalogued event | 13,812 | **1.41%** (rare-event) |
+| Flood | one gauge-site day | 21,828 | **5.95%** |
+| Fire (PNW) | one grid-cell day | 8,724 | **19.18%** |
+| Fire (India) | one grid-cell day | 10,930 | **42.56%** (near-balanced) |
+
+India fire's comparatively strong CSI (0.60) reflects that easier base rate as
+much as model quality; the earthquake module's high FAR reflects its rare-event
+setting. Neither should be read without the column above.
+
+**Real-time feature availability** — for flood and both fire models, every
+non-seasonal predictor comes from **ERA5/GloFAS reanalysis**, which is *not*
+available at forecast time. An operational deployment would substitute NWP
+forecast fields, whose error is not represented in these results. **The reported
+flood and fire skill is an upper bound on real-time skill, and the gap is
+unquantified.** The earthquake module is unaffected — magnitude, depth, location
+and GMPE attenuation are all known within seconds of detection. Full per-feature
+breakdown in `docs/TECHNICAL_REPORT.md` §3.2; listed as a threat in §7.
 
 **Population-scale cyclone evidence (92 real storms, IBTrACS):** the system would
 have raised a cyclone alert a **median of 54 hours before landfall**, with **≥48 h
 lead for ~58%** of storms and ≥72 h for ~40%.
+
+**How wrong can the evacuation assumptions be?** The clearance, compliance and
+casualty rates are planning assumptions, not agency-calibrated numbers — so the
+fair question is whether the *recommendation* is therefore arbitrary. It is not.
+Sweeping each assumption and re-running the real decision function at every point
+(`make sensitivity`) shows the Puri ORDER recommendation survives:
+
+| Assumption | Baseline | Flips at | Margin |
+|---|---:|---:|---|
+| Fatality rate if the zone stays | 0.02 | 0.0075 | **2.7×** |
+| Road egress capacity | 8,000/h | 2,000/h | **4×** |
+| Prior false alarms (cry-wolf) | 0 | never flips (0–10) | — |
+
+The cry-wolf row needs stating carefully: the *recommendation* is insensitive,
+but the *outcome* is not — across that range expected turnout falls by roughly
+three quarters while the order stays put. An insensitive decision is not an
+insensitive result.
 
 **Operational decision quality** is reported per hazard at the dispatch threshold
 (POD/FAR/CSI), with calibration repaired by isotonic recalibration (e.g.,

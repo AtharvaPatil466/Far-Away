@@ -1,0 +1,65 @@
+/* Provenance inspector — reuses the console's existing dark/monospace/lime
+   language. No new palette, no new type scale. */
+.prov { display: flex; flex-direction: column; gap: 1rem; height: 100%; overflow: auto; padding: 1rem 1.25rem; }
+.prov-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem; }
+.prov-head h2 { margin: 0; font-size: 1.05rem; letter-spacing: 0.02em; }
+.prov-id { font-family: ui-monospace, monospace; opacity: 0.6; font-size: 0.8rem; }
+
+/* counts — the toggle's honesty depends on these being visible */
+.prov-counts { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-left: auto; }
+.prov-count { font-family: ui-monospace, monospace; font-size: 0.72rem; padding: 0.15rem 0.5rem;
+  border: 1px solid currentColor; border-radius: 999px; opacity: 0.75; }
+.prov-count.on { opacity: 1; }
+
+.prov-toggle { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem;
+  border: 1px solid currentColor; border-radius: 6px; font-family: ui-monospace, monospace;
+  font-size: 0.78rem; cursor: pointer; background: none; color: inherit; text-align: left; }
+.prov-toggle strong { letter-spacing: 0.04em; }
+.prov-suppressed { opacity: 0.75; font-size: 0.75rem; }
+
+/* timeline */
+.prov-rows { display: flex; flex-direction: column; gap: 0.35rem; }
+.prov-row { display: grid; grid-template-columns: 7.5rem 6.5rem 1fr auto; gap: 0.75rem;
+  align-items: baseline; padding: 0.5rem 0.6rem; border-left: 3px solid transparent;
+  border-radius: 4px; cursor: pointer; font-size: 0.82rem; background: none;
+  color: inherit; text-align: left; width: 100%; }
+.prov-row .t, .prov-row .src { font-family: ui-monospace, monospace; font-size: 0.72rem; opacity: 0.7; }
+
+/* MEANINGFUL dominant, MINOR recessive — the visual half of the definition */
+.prov-row.meaningful { border-left-color: currentColor; opacity: 1; font-weight: 600; }
+.prov-row.minor { opacity: 0.45; font-weight: 400; }
+.prov-row:hover { outline: 1px solid currentColor; }
+.prov-row.open { outline: 1px solid currentColor; }
+
+/* kinds that are NOT ordinary updates read differently at a glance */
+.prov-row.retraction { border-left-style: double; border-left-width: 5px; }
+.prov-row.late { border-left-style: dashed; }
+.prov-row.conflict .what::before { content: '⚠ '; }
+
+.prov-tag { font-family: ui-monospace, monospace; font-size: 0.66rem; letter-spacing: 0.05em;
+  padding: 0.05rem 0.4rem; border: 1px solid currentColor; border-radius: 3px; opacity: 0.8; }
+
+.prov-why { font-size: 0.75rem; opacity: 0.8; grid-column: 3 / -1; }
+.prov-rec { font-family: ui-monospace, monospace; font-size: 0.72rem; grid-column: 3 / -1; }
+
+/* detail */
+.prov-detail { border: 1px solid currentColor; border-radius: 4px; padding: 0.75rem;
+  margin: 0.25rem 0 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.78rem; }
+.prov-diff { font-family: ui-monospace, monospace; font-size: 0.75rem; }
+.prov-diff .before { opacity: 0.6; text-decoration: line-through; }
+.prov-detail dl { display: grid; grid-template-columns: 9rem 1fr; gap: 0.25rem 0.75rem; margin: 0; }
+.prov-detail dt { font-family: ui-monospace, monospace; font-size: 0.7rem; opacity: 0.6; }
+.prov-detail dd { margin: 0; }
+
+/* per-field why panel */
+.prov-fields { display: grid; gap: 0.6rem; }
+.prov-field { border: 1px solid currentColor; border-radius: 4px; padding: 0.6rem 0.75rem; }
+.prov-field h4 { margin: 0 0 0.35rem; font-family: ui-monospace, monospace; font-size: 0.78rem;
+  display: flex; gap: 0.5rem; align-items: baseline; }
+.prov-selected { font-weight: 700; }
+.prov-alt { font-family: ui-monospace, monospace; font-size: 0.73rem; opacity: 0.7;
+  display: flex; gap: 0.5rem; }
+.prov-alt.flagged { opacity: 1; }
+.prov-alt.flagged::before { content: '⚑'; }
+.prov-policy { font-family: ui-monospace, monospace; font-size: 0.68rem; white-space: pre;
+  overflow-x: auto; opacity: 0.75; border-top: 1px solid currentColor; padding-top: 0.6rem; }

@@ -1,0 +1,34 @@
+{
+  "anchor": {
+    "attested_head": "4836d3807f8c76525b442eed284efe62d928ecc829e824725795243c1565e668",
+    "current_head": "4836d3807f8c76525b442eed284efe62d928ecc829e824725795243c1565e668",
+    "detail": "chain head attested by https://github.com/AtharvaPatil466/Far-Away/actions/runs/32560311554",
+    "head_matches": true,
+    "receipt": {
+      "chain_head": "4836d3807f8c76525b442eed284efe62d928ecc829e824725795243c1565e668",
+      "repo": "AtharvaPatil466/Far-Away",
+      "run_id": "32560311554",
+      "server_time": "2026-08-22T07:42:20+00:00",
+      "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/32560311554"
+    },
+    "run_id": "32560311554",
+    "server_time": "2026-08-22T07:42:20+00:00",
+    "stale_after_hours": 48,
+    "state": "verified",
+    "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/32560311554"
+  },
+  "chain_intact": true,
+  "freshness": {
+    "last_commit_at": null,
+    "last_poll_at": null,
+    "poll_cadence_hours": 24,
+    "stale_after_hours": 48,
+    "state": "stalled"
+  },
+  "monotonic": true,
+  "pending": 30,
+  "predictions": 46,
+  "reason": "scoring requires a season: 16 settled (need 30), 0 positive (need 1)",
+  "scoreable": false,
+  "settled": 16
+}
