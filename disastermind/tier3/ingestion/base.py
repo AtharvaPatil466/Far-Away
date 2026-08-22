@@ -131,17 +131,39 @@ class BaseFeedAgent(BaseAgent):
         unreachable feed never crashes the edge node (PRD Step 10).
         """
         if not live:
-            return self.parse(self.sample())
+            return self._tagged(self.parse(self.sample()), "sample")
         try:  # pragma: no cover - network path excluded from tests
             raw = self.fetch(transport=transport)
         except Exception:  # pragma: no cover
             log.exception("%s live poll failed; degrading to sample()", self.name)
             raw = self.sample()
         try:
-            return self.parse(raw)
+            rows = self.parse(raw)
         except Exception:
             log.exception("%s failed to parse live batch; returning empty", self.name)
             return []
+        # An adapter may degrade to its own fixture INTERNALLY -- a missing API
+        # key, a 404, a timeout -- and hand back rows that are structurally
+        # identical to live ones. Nothing downstream could tell, so a dark feed
+        # rendered as a live detection (a fixture fire is still a fire). The
+        # fixture is pure and deterministic, so comparing the batch against it
+        # catches every such path at this one seam, without editing 8 adapters.
+        provenance = "sample" if raw == self.sample() else "live"
+        if provenance == "sample":
+            log.warning(
+                "%s served FIXTURE data on a LIVE poll — feed is dark, "
+                "downstream output is not real", self.name
+            )
+        return self._tagged(rows, provenance)
+
+    @staticmethod
+    def _tagged(rows: list[dict[str, Any]], provenance: str) -> list[dict[str, Any]]:
+        """Stamp each observation with where it actually came from.
+
+        ``_provenance`` is ``"live"`` or ``"sample"``. Consumers that display or
+        journal an observation MUST NOT present a ``"sample"`` row as real.
+        """
+        return [{**row, "_provenance": provenance} for row in rows]
 
     def assess(self, observations: list[dict[str, Any]]) -> tuple[bool, Priority, list[str]]:
         """Decide whether an activation threshold (PRD Step 1) is breached.
@@ -183,12 +205,27 @@ class BaseFeedAgent(BaseAgent):
             return []
 
         is_alert, priority, reasoning = self.assess(observations)
+        provenance = observations[0].get("_provenance", "live")
+        # A DARK feed must never mint an incident on a live node. The fixtures
+        # trip the same activation thresholds real data would -- FIRMS' sample
+        # pixel is 364.5 K at high confidence, so an unkeyed FIRMS adapter would
+        # raise a phantom fire on every tick, forever, indistinguishable from a
+        # real detection. Report the feed as dark instead of inventing an event.
+        if self.live and provenance == "sample":
+            log.warning("%s is DARK — suppressing alert built from fixture data", self.name)
+            is_alert = False
+            priority = Priority.INFO
+            reasoning = [
+                f"{self.feed_name}: FEED DARK — fixture data, no live source; "
+                f"no event minted"
+            ]
         event = self.build_event(observations) if is_alert else None
 
         payload: dict[str, Any] = {
             "kind": self.feed_name,
             "event": event,
             "observations": observations,
+            "provenance": provenance,
         }
         # A breach is an ALERT; a routine non-breach observation is an
         # informational report the prediction tier ingests. The frozen
