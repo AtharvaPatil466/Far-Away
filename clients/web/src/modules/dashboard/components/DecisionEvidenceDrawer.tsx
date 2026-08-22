@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 interface DecisionEvidenceDrawerProps {
   item: EscalationItem | null
   onClose: () => void
-  onApprove: (id: string) => void
+  onApprove: (id: string) => Promise<{ ok: boolean; error?: string }>
   onReject: (id: string) => void
 }
 
@@ -20,6 +20,8 @@ export function DecisionEvidenceDrawer({ item, onClose, onApprove, onReject }: D
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const openerRef = useRef<HTMLElement | null>(null)
   const [evidenceRequested, setEvidenceRequested] = useState(false)
+  const [approvalState, setApprovalState] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [approvalError, setApprovalError] = useState('')
 
   useEffect(() => {
     if (!item) return
@@ -57,6 +59,8 @@ export function DecisionEvidenceDrawer({ item, onClose, onApprove, onReject }: D
 
   useEffect(() => {
     setEvidenceRequested(false)
+    setApprovalState('idle')
+    setApprovalError('')
   }, [item?.id])
 
   if (!item) return null
@@ -76,9 +80,16 @@ export function DecisionEvidenceDrawer({ item, onClose, onApprove, onReject }: D
     agentPath: [],
   }
 
-  const complete = (callback: (id: string) => void) => {
-    callback(item.id)
-    onClose()
+  const approveDecision = async () => {
+    setApprovalState('submitting')
+    setApprovalError('')
+    const result = await onApprove(item.id)
+    if (result.ok) {
+      onClose()
+      return
+    }
+    setApprovalState('error')
+    setApprovalError(result.error ?? 'Approval was not confirmed. This decision remains under review.')
   }
 
   return (
@@ -171,17 +182,22 @@ export function DecisionEvidenceDrawer({ item, onClose, onApprove, onReject }: D
               More evidence requested locally. No backend request has been sent.
             </p>
           )}
+          {approvalState === 'error' && (
+            <p className="mt-5 border border-error/40 bg-error-container/15 p-3 text-body-sm text-error" role="alert">
+              {approvalError}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col-reverse gap-2 border-t border-outline-variant/20 bg-surface-container-high p-4 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => setEvidenceRequested(true)}>
+          <Button type="button" variant="outline" disabled={approvalState === 'submitting'} onClick={() => setEvidenceRequested(true)}>
             Request More Evidence
           </Button>
-          <Button type="button" variant="destructive" onClick={() => complete(onReject)}>
+          <Button type="button" variant="destructive" disabled={approvalState === 'submitting'} onClick={() => { onReject(item.id); onClose() }}>
             Reject
           </Button>
-          <Button type="button" variant="accent" onClick={() => complete(onApprove)}>
-            Approve
+          <Button type="button" variant="accent" disabled={approvalState === 'submitting'} onClick={() => void approveDecision()}>
+            {approvalState === 'submitting' ? 'Authorizing…' : 'Approve'}
           </Button>
         </div>
       </aside>

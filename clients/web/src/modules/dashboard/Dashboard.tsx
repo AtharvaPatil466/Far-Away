@@ -20,6 +20,8 @@ import { IncidentHero } from './components/IncidentHero'
 import { MissionTelemetry } from './components/MissionTelemetry'
 import { DecisionBrief } from './components/DecisionBrief'
 import { TrustStrip } from './components/TrustStrip'
+import { AuthorizationReceipt } from './components/AuthorizationReceipt'
+import { commanderStageForApproval } from './lib/approvalFlow'
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -45,11 +47,15 @@ const DEMO_AGENT_STAGES: readonly AgentTraceStage[] = [
 
 export function Dashboard() {
   const { status, setWsState } = useApiStatus()
-  const { escalations, pending, approve, overrideItem, dataSource } = useEscalations()
+  const { escalations, pending, approve, overrideItem, dataSource, lastAuthorization, clearAuthorization } = useEscalations()
   const [mapState, setMapState] = useState<MapState>(SYNTHETIC_MAP_STATE)
   const [reviewingItem, setReviewingItem] = useState<EscalationItem | null>(null)
   const [goldenDemo, setGoldenDemo] = useState(INITIAL_GOLDEN_DEMO_STATE)
   const closeDecisionReview = useCallback(() => setReviewingItem(null), [])
+  const reviewDecision = useCallback((item: EscalationItem) => {
+    clearAuthorization()
+    setReviewingItem(item)
+  }, [clearAuthorization])
   const now = useNow(1000)
 
   // ── Live telemetry: drive the map + unit positions from the Group A socket
@@ -149,7 +155,11 @@ export function Dashboard() {
     feed: 'unknown',
   }
   const goldenDemoMeta = goldenDemo.step === 'idle' ? null : GOLDEN_DEMO_STEPS[goldenDemo.step]
-  const traceStages = goldenDemo.step === 'idle' ? DEMO_AGENT_STAGES : goldenDemoAgentTrace(goldenDemo.step)
+  const traceStages = goldenDemo.step === 'idle'
+    ? DEMO_AGENT_STAGES.map((stage) => stage.id === 'commander'
+      ? { ...stage, state: commanderStageForApproval(lastAuthorization) }
+      : stage)
+    : goldenDemoAgentTrace(goldenDemo.step)
   const clock = new Date(now).toLocaleTimeString('en-IN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -173,12 +183,19 @@ export function Dashboard() {
     setGoldenDemo(INITIAL_GOLDEN_DEMO_STATE)
   }
 
-  const approveReviewedDecision = (id: string) => {
+  const approveReviewedDecision = async (id: string): Promise<{ ok: boolean; error?: string }> => {
     if (id === GOLDEN_DEMO_ESCALATION.id) {
       setGoldenDemo({ step: 'completed', decision: 'approved' })
-      return
+      return { ok: true }
     }
-    approve(id)
+    const result = await approve(id)
+    if (result) return { ok: true }
+    return {
+      ok: false,
+      error: dataSource === 'live'
+        ? 'The backend did not confirm dispatch and audit append. Review remains required.'
+        : 'This is fallback decision data. Start the backend and review a live escalation to authorize a real dispatch.',
+    }
   }
 
   const rejectReviewedDecision = (id: string) => {
@@ -199,7 +216,7 @@ export function Dashboard() {
           criticalCount={criticalCount}
           mapStatus={mapStatus}
           clock={clock}
-          onReviewCritical={() => topCritical && setReviewingItem(topCritical)}
+          onReviewCritical={() => topCritical && reviewDecision(topCritical)}
           demoControls={(
             <GoldenDemoControls
               step={goldenDemo.step}
@@ -217,6 +234,8 @@ export function Dashboard() {
 
         <AgentTrace stages={traceStages} />
 
+        {lastAuthorization && <AuthorizationReceipt result={lastAuthorization} />}
+
         <DecisionBrief
           escalation={topCritical}
           remainingEscalations={pending.filter((item) => item.id !== topCritical?.id)}
@@ -224,7 +243,7 @@ export function Dashboard() {
           highRiskZones={highRiskZones}
           activeUnits={activeUnits}
           unitCount={unitCount}
-          onReview={setReviewingItem}
+          onReview={reviewDecision}
         />
 
         <TrustStrip status={systemStatus} />
