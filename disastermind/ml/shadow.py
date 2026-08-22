@@ -30,14 +30,27 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .eval.decision import confusion_at
 from .eval.metrics import brier_score, calibration_bins, expected_calibration_error, roc_auc
 
 _GENESIS = "shadow-genesis"
+
+#: The shadow worker runs daily (``.github/workflows/shadow-season.yml``, 06:17
+#: UTC). Every freshness threshold is derived from that cadence HERE, so
+#: changing the cron cannot leave the console asserting staleness against a
+#: schedule nobody updated.
+POLL_CADENCE_HOURS = 24
+#: One missed poll is a flaky runner; two is a broken pipeline.
+STALE_AFTER_HOURS = POLL_CADENCE_HOURS * 2
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _chain_hash(prev_hash: str, payload: dict[str, Any]) -> str:
@@ -64,8 +77,10 @@ class ShadowJournal:
     silently dropping them.
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, *, clock: Callable[[], str] | None = None) -> None:
         self.path = path
+        #: Injectable so tests are deterministic; production uses wall-clock UTC.
+        self._clock = clock or _utc_now_iso
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
 
     # ------------------------------------------------------------------ writing
@@ -113,7 +128,21 @@ class ShadowJournal:
         }
         return self._append("outcome", payload)
 
+    def record_heartbeat(self, *, polled_at: str | None = None, detail: str = "") -> ShadowRecord:
+        """Journal that the worker RAN, whether or not it found anything.
+
+        Without this, a healthy quiet stretch -- worker polling, no qualifying
+        events -- is byte-for-byte indistinguishable from a dead pipeline: both
+        leave the journal unchanged. The heartbeat is what separates them, and
+        it rides in the chain so it cannot be fabricated after the fact.
+        """
+        return self._append("heartbeat", {"polled_at": polled_at or self._clock(), "detail": detail})
+
     def _append(self, kind: str, payload: dict[str, Any]) -> ShadowRecord:
+        # Stamped HERE and only here, so it lands on new entries and is never
+        # backfilled onto existing ones. It is inside the payload, hence inside
+        # the hash, hence not forgeable after the fact.
+        payload = {**payload, "committed_at": self._clock()}
         h = _chain_hash(self._last_hash(), payload)
         rec = {"kind": kind, "payload": payload, "hash": h}
         with open(self.path, "a", encoding="utf-8") as fh:
@@ -137,6 +166,24 @@ class ShadowJournal:
             if rec.get("hash") != _chain_hash(prev, rec.get("payload", {})):
                 return False
             prev = rec["hash"]
+        return True
+
+    def verify_monotonic(self) -> bool:
+        """True iff ``committed_at`` never goes backwards.
+
+        Deliberately separate from :meth:`verify_chain`: a re-hashed forgery and
+        a clock that jumped are different failures with different remedies, and
+        collapsing them into one red light tells an operator nothing about which
+        one happened. Entries predating the field are skipped, not failed.
+        """
+        prev = ""
+        for rec in self._iter_raw():
+            stamp = rec.get("payload", {}).get("committed_at")
+            if stamp is None:
+                continue
+            if prev and stamp < prev:
+                return False
+            prev = stamp
         return True
 
     def records(self) -> list[ShadowRecord]:
@@ -224,6 +271,60 @@ def score_season(
         }
     )
     return scorecard
+
+
+def freshness(journal: ShadowJournal, *, now: str | None = None) -> dict[str, Any]:
+    """Liveness of the season, from two INDEPENDENTLY tracked facts.
+
+    ``last_poll_at`` (the worker ran) and ``last_commit_at`` (an entry was
+    written) are different things. Conflating them is the classic dashboard lie:
+    a healthy quiet stretch -- worker polling on schedule, no qualifying
+    earthquakes -- produces exactly the same unchanged journal as a pipeline
+    that died last week. One deserves a green light and the other a red one.
+
+    Hence three states, never two:
+
+    * ``stalled``   -- no poll within :data:`STALE_AFTER_HOURS`. The pipeline is
+      broken. This is the only state that should show red.
+    * ``ingesting`` -- polled recently AND committed recently. Events arriving.
+    * ``quiet``     -- polled recently, nothing committed. Working as intended;
+      the world simply did not produce a qualifying event. NOT an error.
+    """
+    now = now or _utc_now_iso()
+    last_poll = last_commit = None
+    for rec in journal._iter_raw():
+        payload = rec.get("payload", {})
+        stamp = payload.get("committed_at")
+        if rec.get("kind") == "heartbeat":
+            # A heartbeat proves the POLL, never the ingestion. Counting its own
+            # commit stamp as a commit would make every quiet season report
+            # "ingesting" -- the exact conflation this function exists to avoid.
+            last_poll = max(last_poll or "", payload.get("polled_at", "") or stamp or "")
+            continue
+        if stamp:
+            last_commit = max(last_commit or "", stamp)
+            # A substantive commit also proves the worker ran, so older journals
+            # written before heartbeats existed do not read as stalled.
+            last_poll = max(last_poll or "", stamp)
+
+    stale_before = (
+        datetime.fromisoformat(now) - timedelta(hours=STALE_AFTER_HOURS)
+    ).isoformat()
+
+    if last_poll is None or last_poll < stale_before:
+        state = "stalled"
+    elif last_commit is not None and last_commit >= stale_before:
+        state = "ingesting"
+    else:
+        state = "quiet"
+
+    return {
+        "state": state,
+        "last_poll_at": last_poll,
+        "last_commit_at": last_commit,
+        "stale_after_hours": STALE_AFTER_HOURS,
+        "poll_cadence_hours": POLL_CADENCE_HOURS,
+    }
 
 
 def export_for_review(journal: ShadowJournal) -> dict[str, Any]:

@@ -29,7 +29,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from .registry import get_model
-from .shadow import ShadowJournal, export_for_review, score_season
+from .shadow import ShadowJournal, export_for_review, freshness, score_season
 
 # Forecast horizon per hazard — how far ahead the prediction speaks, used to
 # stamp ``window_end``. Earthquake is rapid impact assessment (no lead horizon).
@@ -115,9 +115,24 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 
 def _cmd_verify(args: argparse.Namespace) -> int:
-    ok = ShadowJournal(args.journal).verify_chain()
-    print(json.dumps({"journal": args.journal, "chain_intact": ok}, indent=2))
-    return 0 if ok else 1
+    """Report each integrity property SEPARATELY.
+
+    A re-hashed forgery, a clock that went backwards, and a cron that stopped
+    are three different failures with three different remedies. Collapsing them
+    into one boolean tells an operator nothing about which one happened -- and
+    makes a merely-stale season look like a tampered one. Only the first two
+    are integrity failures; staleness is reported, not failed.
+    """
+    journal = ShadowJournal(args.journal)
+    chain_ok = journal.verify_chain()
+    monotonic = journal.verify_monotonic()
+    print(json.dumps({
+        "journal": args.journal,
+        "chain_intact": chain_ok,
+        "committed_at_monotonic": monotonic,
+        "freshness": freshness(journal),
+    }, indent=2))
+    return 0 if (chain_ok and monotonic) else 1
 
 
 def _build_parser() -> argparse.ArgumentParser:
