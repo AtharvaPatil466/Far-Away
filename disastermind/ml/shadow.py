@@ -32,7 +32,7 @@ import json
 import os
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .eval.decision import confusion_at
@@ -50,7 +50,7 @@ STALE_AFTER_HOURS = POLL_CADENCE_HOURS * 2
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _chain_hash(prev_hash: str, payload: dict[str, Any]) -> str:

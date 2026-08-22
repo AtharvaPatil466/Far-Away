@@ -40,7 +40,7 @@ class TestClosedLoop:
         assert summary["status"] == "enroute"      # idle -> enroute on first order
         assert summary["acked"] and summary["beaconed"]
         paths = [p["path"] for p in t.posts]  # type: ignore[attr-defined]
-        assert f"/field/ndrf-7/ack" in paths and f"/field/ndrf-7/beacon" in paths
+        assert "/field/ndrf-7/ack" in paths and "/field/ndrf-7/beacon" in paths
 
     def test_service_is_idempotent(self) -> None:
         c = HttpFieldClient("ndrf-7", "http://gw", transport=_fake_transport([ORDER]))
