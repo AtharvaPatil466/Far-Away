@@ -86,6 +86,9 @@ review-packet: ## Build the self-contained external-review packet (./review_pack
 SHADOW_JOURNAL ?= shadow/usgs_season.jsonl
 shadow-tick: ## Pull the live USGS feed and journal new predictions + settle outcomes.
 	$(PYTHON) -m disastermind.live.usgs_shadow --journal $(SHADOW_JOURNAL) --mode both
+benchmark: ## Measure coordination throughput + latency percentiles (reporting, not a gate).
+	$(PYTHON) tools/benchmark_report.py
+
 sensitivity: ## Regenerate the evacuation sensitivity sweep the console chart reads.
 	$(PYTHON) tools/export_sensitivity.py
 

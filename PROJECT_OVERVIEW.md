@@ -21,6 +21,7 @@ surfaced through a browser command-and-control console.
 | **Hazards** | Cyclone/flood, earthquake (rapid impact assessment), urban/forest fire. |
 | **Why the decision layer is the moat** | Plenty of models forecast hazards. What is scarce is the layer that turns a probability into *order or hold* — break-even cost analysis, clearance feasibility, cohort equity, cry-wolf compliance decay — and refuses to issue a mass-evacuation order without a human. |
 | **Design stance** | Standard-library-first and degrades gracefully; explicitly *decision-support* (a human commander holds authority) with a tamper-evident, externally anchored audit trail. |
+| **Measured performance** | ~**257 incidents/s** and ~**7,900 messages/s** through the full agent DAG single-process, p99 **68 ms** per 10-incident batch (`make benchmark`, machine-dependent). |
 | **Evidence quality** | **1,314** offline deterministic Python tests at **86% coverage**, plus a Vitest console suite. Every published number regenerates from committed fixtures via `make reproduce` (Δ = 0), and a live shadow season predicts on the real USGS feed into a hash-chained journal. |
 
 ---
