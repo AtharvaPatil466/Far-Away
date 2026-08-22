@@ -9,8 +9,30 @@ import os
 from dataclasses import dataclass, field
 
 
+def _load_dotenv_if_present() -> None:
+    env_path = ".env"
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip().strip("'\"")
+                    if key and key not in os.environ:
+                        os.environ[key] = val
+        except Exception:
+            pass
+
+_load_dotenv_if_present()
+
+
+
 def _env(key: str, default: str) -> str:
     return os.environ.get(key, default)
+
 
 
 def _env_int(key: str, default: int) -> int:
@@ -70,7 +92,10 @@ class Settings:
     twilio_sid: str = field(default_factory=lambda: _env("DM_TWILIO_SID", ""))
     twilio_token: str = field(default_factory=lambda: _env("DM_TWILIO_TOKEN", ""))
     fcm_key: str = field(default_factory=lambda: _env("DM_FCM_KEY", ""))
-    iridium_endpoint: str = field(default_factory=lambda: _env("DM_IRIDIUM_URL", ""))
+    # --- LLM settings -----------------------------------------------------
+    llm_provider: str = field(default_factory=lambda: _env("DM_LLM_PROVIDER", ""))
+    llm_model: str = field(default_factory=lambda: _env("DM_LLM_MODEL", ""))
+    openrouter_key: str = field(default_factory=lambda: _env("DM_OPENROUTER_KEY", ""))
 
 
 settings = Settings()

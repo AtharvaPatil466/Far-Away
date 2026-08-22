@@ -32,6 +32,7 @@ from ._constants import (
     _DEFAULT_PAGE_LIMIT,
     _DEFAULT_WS_MAX,
     _DEFAULT_WS_PING,
+    _DEFAULT_WS_QUEUE,
 )
 from ._env import _env_float, _env_int
 from ._errors import _is_json_decode
@@ -280,12 +281,28 @@ def create_app(
             from ...llm.client import make_client
 
             client = make_client(getattr(loop, "settings", None))
-            if getattr(client, "name", "template") == "anthropic":
-                out["narrative"] = client.generate(
+            cname = getattr(client, "name", "template")
+            if cname != "template":
+                summary_prompt = (
                     "Write a concise (<=150 word) post-incident executive summary for "
                     "an emergency commander, from this report:\n\n" + out["markdown"]
                 )
-                out["narrative_source"] = "anthropic"
+                text = client.generate(summary_prompt)
+                # A provider that fails degrades by echoing its prompt back (the
+                # documented fallback contract). Labelling that echo as provider
+                # prose would feed instructions to a commander as an executive
+                # summary — treat an echo as a failure and use the deterministic
+                # summary instead.
+                if text and text != summary_prompt:
+                    out["narrative"] = text
+                    out["narrative_source"] = cname
+                else:
+                    log.warning(
+                        "%s returned no usable narrative; using deterministic summary",
+                        cname,
+                    )
+                    out["narrative"] = deterministic
+                    out["narrative_source"] = "template"
             else:
                 out["narrative"] = deterministic
                 out["narrative_source"] = "template"
@@ -302,7 +319,7 @@ def create_app(
 
         The browser must NOT call Anthropic directly (it would ship the key in the
         bundle and needs the dangerous-direct-browser-access header). This proxies
-        ``{messages:[{role,content}]}`` to ``claude-sonnet-4-6`` with the key held
+        ``{messages:[{role,content}]}`` to the active LLM provider with the key held
         SERVER-SIDE, returning ``{text, source}``. With no key configured it
         returns 503 so the caller falls back to its own deterministic report —
         we never fake LLM prose.
@@ -325,15 +342,27 @@ def create_app(
             from ...llm.client import make_client
 
             client = make_client(getattr(loop, "settings", None))
-            if getattr(client, "name", "template") != "anthropic":
+            cname = getattr(client, "name", "template")
+            if cname == "template":
                 return JSONResponse(
-                    {"error": "LLM not configured (set DM_ANTHROPIC_KEY); use local fallback",
+                    {"error": "LLM not configured; use local fallback",
                      "source": "none"},
                     status_code=503,
                 )
-            return {"text": client.generate(prompt), "source": "anthropic"}
+            # generate() is synchronous network I/O (urllib / anthropic SDK);
+            # run it on a worker thread so one slow upstream cannot stall this
+            # event loop (and every live /ws stream) for the call's duration.
+            text = await asyncio.to_thread(client.generate, prompt)
+            if not text or text == prompt:
+                # Echo == provider failure (documented degrade contract): report
+                # it honestly instead of returning instructions as completion.
+                return JSONResponse(
+                    {"error": "LLM call failed", "source": cname}, status_code=502
+                )
+            return {"text": text, "source": cname}
         except Exception:  # pragma: no cover - upstream failure -> caller falls back
             return JSONResponse({"error": "LLM call failed", "source": "error"}, status_code=502)
+
 
     _route("/llm/generate", llm_generate, methods=["POST"])
 
@@ -506,6 +535,7 @@ def create_app(
     # bounds how long an idle/half-open socket survives before a ping prunes it.
     ws_max = _env_int("DM_WS_MAX", _DEFAULT_WS_MAX)
     ws_ping = _env_float("DM_WS_PING", _DEFAULT_WS_PING)
+    ws_queue_max = _env_int("DM_WS_QUEUE", _DEFAULT_WS_QUEUE)
     _ws_state: dict[str, int] = {"count": 0}
     _ws_count_lock = asyncio.Lock()
 
@@ -523,8 +553,10 @@ def create_app(
         Each new bus message is queued by a service listener and drained to the
         socket. We bridge the synchronous bus callback into asyncio via the running
         loop so the bus is never blocked by a slow client. Hardening: a concurrent-
-        connection cap (``DM_WS_MAX``) closes excess sockets, and a server-side
-        heartbeat ping every ``DM_WS_PING`` seconds drops dead/half-open clients.
+        connection cap (``DM_WS_MAX``) closes excess sockets, a server-side
+        heartbeat ping every ``DM_WS_PING`` seconds drops dead/half-open clients,
+        and each client's queue is bounded (``DM_WS_QUEUE``) so a slow reader sheds
+        its oldest pending updates instead of growing memory without bound.
         """
         # Concurrency cap: refuse (politely close) once at capacity so a flood of
         # sockets cannot exhaust the process. Accept first so the close code lands.
@@ -535,45 +567,63 @@ def create_app(
                 return
             _ws_state["count"] += 1
 
-        await websocket.accept()
-        loop_ = asyncio.get_event_loop()
-        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-
-        def _push(payload: dict[str, Any]) -> None:
-            loop_.call_soon_threadsafe(queue.put_nowait, payload)
-
-        unsubscribe = svc.add_listener(_push)
+        # Everything past here MUST decrement the slot — including a failed
+        # accept() on an already-gone peer, which previously leaked capacity
+        # until restart.
         try:
-            # If a shutdown was requested before we even accepted, close at once.
-            if _ws_closing.is_set():
-                await websocket.close(code=1001)  # 1001 = "going away"
-                return
-            # Send an initial snapshot so a fresh client is not blank.
-            await websocket.send_json({"kind": "snapshot", "topics": svc.topic_counts()})
-            while True:
+            await websocket.accept()
+            loop_ = asyncio.get_event_loop()
+            queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=ws_queue_max)
+
+            def _push(payload: dict[str, Any]) -> None:
+                def _enqueue() -> None:
+                    if queue.full():
+                        # Shed the OLDEST update so the client keeps receiving the
+                        # freshest state instead of a growing backlog.
+                        try:
+                            queue.get_nowait()
+                        except asyncio.QueueEmpty:  # pragma: no cover - raced full
+                            pass
+                    try:
+                        queue.put_nowait(payload)
+                    except asyncio.QueueFull:  # pragma: no cover - raced full
+                        pass
+
+                loop_.call_soon_threadsafe(_enqueue)
+
+            unsubscribe = svc.add_listener(_push)
+            try:
+                # If a shutdown was requested before we even accepted, close at once.
                 if _ws_closing.is_set():
-                    # Graceful shutdown in progress: close cleanly so the client
-                    # can reconnect to the next instance instead of seeing a drop.
                     await websocket.close(code=1001)  # 1001 = "going away"
                     return
-                try:
-                    payload = await asyncio.wait_for(queue.get(), timeout=ws_ping)
-                except TimeoutError:
-                    # Idle period elapsed: re-check the shutdown flag, then send a
-                    # heartbeat. A dead/half-open peer raises here, dropping the
-                    # connection (the finally cleans up).
+                # Send an initial snapshot so a fresh client is not blank.
+                await websocket.send_json({"kind": "snapshot", "topics": svc.topic_counts()})
+                while True:
                     if _ws_closing.is_set():
+                        # Graceful shutdown in progress: close cleanly so the client
+                        # can reconnect to the next instance instead of seeing a drop.
                         await websocket.close(code=1001)  # 1001 = "going away"
                         return
-                    await websocket.send_json({"kind": "ping", "ts": time.time()})
-                    continue
-                await websocket.send_json(payload)
+                    try:
+                        payload = await asyncio.wait_for(queue.get(), timeout=ws_ping)
+                    except TimeoutError:
+                        # Idle period elapsed: re-check the shutdown flag, then send a
+                        # heartbeat. A dead/half-open peer raises here, dropping the
+                        # connection (the finally cleans up).
+                        if _ws_closing.is_set():
+                            await websocket.close(code=1001)  # 1001 = "going away"
+                            return
+                        await websocket.send_json({"kind": "ping", "ts": time.time()})
+                        continue
+                    await websocket.send_json(payload)
+            finally:
+                unsubscribe()
         except WebSocketDisconnect:
             pass
         except Exception:  # a broken socket must not leak the listener slot
             pass
         finally:
-            unsubscribe()
             async with _ws_count_lock:
                 _ws_state["count"] = max(0, _ws_state["count"] - 1)
 

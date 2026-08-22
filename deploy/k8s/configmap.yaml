@@ -41,4 +41,3 @@ data:
   DM_TWILIO_SID: ""
   DM_TWILIO_TOKEN: ""
   DM_FCM_KEY: ""
-  DM_IRIDIUM_URL: ""

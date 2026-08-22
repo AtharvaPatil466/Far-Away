@@ -17,6 +17,7 @@ from .advisor import (
 from .client import (
     AnthropicClient,
     LLMClient,
+    OpenRouterClient,
     TemplateClient,
     make_client,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "LLMClient",
     "TemplateClient",
     "AnthropicClient",
+    "OpenRouterClient",
     "make_client",
     "EscalationNarrator",
     "ESCALATION_NARRATIVE",
@@ -34,3 +36,4 @@ __all__ = [
     "ReallocationAdvice",
     "ReallocationMove",
 ]
+

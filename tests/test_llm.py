@@ -27,10 +27,15 @@ from disastermind.llm import (
     ESCALATION_NARRATIVE,
     AnthropicClient,
     EscalationNarrator,
+    OpenRouterClient,
     TemplateClient,
     make_client,
 )
 from disastermind.llm import build as llm_build
+import io
+import json
+import urllib.error
+from unittest.mock import MagicMock, patch
 
 
 def _escalation_msg(human_only: bool = False) -> Message:
@@ -82,7 +87,7 @@ def test_template_client_is_deterministic_and_offline():
 
 
 def test_make_client_falls_back_to_template_without_key(monkeypatch):
-    for var in ("DM_ANTHROPIC_KEY", "ANTHROPIC_API_KEY"):
+    for var in ("DM_ANTHROPIC_KEY", "ANTHROPIC_API_KEY", "DM_LLM_PROVIDER", "DM_LLM_MODEL", "OPENROUTER_API_KEY", "DM_OPENROUTER_KEY"):
         monkeypatch.delenv(var, raising=False)
     client = make_client(Settings())
     assert isinstance(client, TemplateClient)
@@ -90,6 +95,8 @@ def test_make_client_falls_back_to_template_without_key(monkeypatch):
 
 def test_make_client_selects_anthropic_with_key(monkeypatch):
     monkeypatch.delenv("DM_ANTHROPIC_KEY", raising=False)
+    monkeypatch.delenv("DM_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("DM_LLM_MODEL", raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
     client = make_client(Settings())
     assert isinstance(client, AnthropicClient)
@@ -103,6 +110,144 @@ def test_anthropic_client_degrades_to_prompt_without_sdk(monkeypatch):
     client = AnthropicClient(api_key="sk-test-key")
     prompt = "hello brief"
     assert client.generate(prompt) == prompt
+
+
+
+def test_openrouter_client_successful_generation():
+    client = OpenRouterClient(api_key="sk-or-test-key", model="openai/gpt-5")
+    mock_resp_data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "Rendered OpenRouter completion response.",
+                }
+            }
+        ]
+    }
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps(mock_resp_data).encode("utf-8")
+    mock_response.__enter__.return_value = mock_response
+    mock_response.__exit__.return_value = False
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        res = client.generate("test prompt")
+        assert res == "Rendered OpenRouter completion response."
+        assert mock_urlopen.called
+        req = mock_urlopen.call_args[0][0]
+        assert req.get_header("Authorization") == "Bearer sk-or-test-key"
+        assert req.get_header("Content-type") == "application/json"
+
+
+def test_openrouter_client_sends_configured_model_ox_alpha():
+    client = OpenRouterClient(api_key="sk-or-test-key", model="stealth/ox-alpha")
+    mock_resp_data = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "OX ALPHA IS CONNECTED",
+                }
+            }
+        ]
+    }
+    mock_response = MagicMock()
+    mock_response.read.return_value = json.dumps(mock_resp_data).encode("utf-8")
+    mock_response.__enter__.return_value = mock_response
+    mock_response.__exit__.return_value = False
+
+    with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+        res = client.generate("Reply with exactly: OX ALPHA IS CONNECTED")
+        assert res == "OX ALPHA IS CONNECTED"
+        assert mock_urlopen.called
+        req = mock_urlopen.call_args[0][0]
+        payload = json.loads(req.data.decode("utf-8"))
+        assert payload["model"] == "stealth/ox-alpha"
+
+
+
+def test_openrouter_client_missing_key():
+    client = OpenRouterClient(api_key="")
+    assert client.generate("prompt body") == "prompt body"
+
+
+def test_openrouter_client_http_error_degrades_gracefully():
+    client = OpenRouterClient(api_key="sk-or-test-key")
+    error = urllib.error.HTTPError(
+        url="https://openrouter.ai/api/v1/chat/completions",
+        code=402,
+        msg="Payment Required",
+        hdrs={},
+        fp=io.BytesIO(b"{}"),
+    )
+    with patch("urllib.request.urlopen", side_effect=error):
+        assert client.generate("prompt body") == "prompt body"
+
+
+def test_openrouter_client_malformed_json_degrades_gracefully():
+    client = OpenRouterClient(api_key="sk-or-test-key")
+    mock_response = MagicMock()
+    mock_response.read.return_value = b"invalid json"
+    mock_response.__enter__.return_value = mock_response
+    mock_response.__exit__.return_value = False
+
+    with patch("urllib.request.urlopen", return_value=mock_response):
+        assert client.generate("prompt body") == "prompt body"
+
+
+def test_openrouter_client_timeout_degrades_gracefully():
+    client = OpenRouterClient(api_key="sk-or-test-key")
+    with patch("urllib.request.urlopen", side_effect=TimeoutError("Connection timed out")):
+        assert client.generate("prompt body") == "prompt body"
+
+
+def test_make_client_selects_openrouter_when_explicit(monkeypatch):
+    monkeypatch.setenv("DM_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.delenv("DM_LLM_MODEL", raising=False)
+    client = make_client(Settings())
+    assert isinstance(client, OpenRouterClient)
+    assert client.name == "openrouter"
+    assert client.model == "openai/gpt-5"
+
+
+def test_make_client_selects_openrouter_with_ox_alpha(monkeypatch):
+    monkeypatch.setenv("DM_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("DM_LLM_MODEL", "stealth/ox-alpha")
+    client = make_client(Settings())
+    assert isinstance(client, OpenRouterClient)
+    assert client.name == "openrouter"
+    assert client.model == "stealth/ox-alpha"
+
+
+
+def test_make_client_does_not_select_openrouter_without_explicit_provider(monkeypatch):
+    monkeypatch.delenv("DM_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("DM_ANTHROPIC_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    client = make_client(Settings())
+    # Requirement 6: Must NOT select OpenRouter without explicit DM_LLM_PROVIDER
+    assert isinstance(client, TemplateClient)
+
+
+def test_make_client_openrouter_missing_key_falls_back_to_template(monkeypatch):
+    monkeypatch.setenv("DM_LLM_PROVIDER", "openrouter")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("DM_OPENROUTER_KEY", raising=False)
+    client = make_client(Settings())
+    assert isinstance(client, TemplateClient)
+
+
+def test_make_client_configurable_model_via_env(monkeypatch):
+    monkeypatch.setenv("DM_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    monkeypatch.setenv("DM_LLM_MODEL", "google/gemini-2.5-flash")
+    client = make_client(Settings())
+    assert isinstance(client, OpenRouterClient)
+    assert client.model == "google/gemini-2.5-flash"
+
 
 
 # --------------------------------------------------------------- narrator tests

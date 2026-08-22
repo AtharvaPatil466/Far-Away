@@ -231,19 +231,18 @@ class DashboardService:
         # Scope the key by action+report so the same key reused across distinct
         # operations can't alias to an unrelated cached result.
         cache_key = f"{action}:{report_id}:{key}"
+        # Execute ``act`` INSIDE the lock: releasing it between the cache check
+        # and ``act()`` let two racing retries with the same key BOTH run the
+        # action (double dispatch) before either stored its result. Keyed
+        # approve/reject are rare human actions and complete in microseconds
+        # (one bus fan-out), so serialising them is safe; correctness demands it.
         with self._idem_lock:
             cached = self._idem.get(cache_key)
             if cached is not None:
                 self._idem.move_to_end(cache_key)
                 # Flag the replay so callers/tests can tell it wasn't re-executed.
                 return {**cached, "idempotent_replay": True}
-        result = act()
-        with self._idem_lock:
-            # Re-check under lock: a racing request may have populated it first.
-            existing = self._idem.get(cache_key)
-            if existing is not None:
-                self._idem.move_to_end(cache_key)
-                return {**existing, "idempotent_replay": True}
+            result = act()
             self._idem[cache_key] = result
             self._idem.move_to_end(cache_key)
             while len(self._idem) > max(1, self.idempotency_cap):

@@ -409,8 +409,10 @@ class IncidentReporter:
         records: list[dict[str, Any]] = []
         logger = self.logger
         if logger is not None:
+            # ``memory`` may be a list OR the bounded ring (deque) used by the
+            # null logger — accept any non-string iterable of dict records.
             mem = getattr(logger, "memory", None)
-            if isinstance(mem, list):
+            if mem and not isinstance(mem, (str, bytes)):
                 records.extend(r for r in mem if isinstance(r, dict))
             path = getattr(logger, "path", "") or ""
             if path and os.path.exists(path):

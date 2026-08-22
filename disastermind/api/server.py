@@ -128,13 +128,21 @@ class DashboardServer:
         )
 
     def _mount_security(self, app: Any) -> None:
-        """Optionally enforce API auth + rate limiting (PRD Step 7 hardening).
+        """Enforce API auth (when keys are configured) + per-IP rate limiting.
 
-        OFF BY DEFAULT — enforced only when API tokens are configured via the
-        environment (``DM_API_KEYS`` / ``DM_API_KEYS_MAP``); an unconfigured
-        deployment stays fully open so existing routes/tests are unaffected. The
-        static UI and ``/health`` stay open even when auth is on. Any failure
-        here is swallowed so security setup can never break dashboard creation.
+        Token auth is opt-in — enforced only when API tokens are configured via
+        the environment (``DM_API_KEYS`` / ``DM_API_KEYS_MAP``); an unconfigured
+        deployment stays default-open so existing routes/tests are unaffected.
+        The static UI and ``/health`` stay open even when auth is on.
+
+        Per-IP rate limiting, however, is ALWAYS mounted: with no token store
+        there was previously no bound at all, leaving the cost-bearing LLM
+        proxy (``/llm/generate``, ``/report/generate``) and every other route
+        unlimited against an anonymous flood from a single source. Generous
+        defaults (``DM_RATE_IP_*``) never trip legitimate operators.
+
+        Any failure here is swallowed so security setup can never break
+        dashboard creation.
         """
         try:
             from ..security.auth import (
@@ -149,9 +157,7 @@ class DashboardServer:
             return
 
         store = TokenStore.from_env()
-        if not getattr(store, "enabled", False):
-            return  # default-open: no API keys configured
-
+        auth_on = bool(getattr(store, "enabled", False))
         limiter = RateLimiter()
         ip_limiter = ip_rate_limiter()
         rbac_on = bool(getattr(store, "rbac_enabled", False))
@@ -269,7 +275,9 @@ class DashboardServer:
 
                 # (2) PER-IP rate limit FIRST — bounds an *unauthenticated* burst
                 # from a single source before any token check, so a flood of
-                # anonymous/invalid-token requests cannot be unbounded.
+                # anonymous/invalid-token requests cannot be unbounded. This also
+                # applies when auth is OFF (default-open): the bound is the only
+                # protection the cost-bearing LLM proxy has in that mode.
                 ip_result = ip_limiter.check(client_ip(scope))
                 if not ip_result.allowed:
                     return await _reject(
@@ -280,6 +288,13 @@ class DashboardServer:
                         _retry_seconds(ip_result),
                         extra_headers=_ratelimit_headers(ip_limiter, ip_result),
                     )
+
+                if not auth_on:
+                    # Default-open deployment: no token gate, but the per-source
+                    # bound above still applies. No per-principal headers are
+                    # added to allowed responses, so ordinary traffic is
+                    # byte-for-byte unchanged.
+                    return await self.inner(scope, receive, send)
 
                 headers = {k.lower(): v for k, v in (scope.get("headers") or [])}
                 raw = headers.get(b"authorization") or headers.get(b"x-api-key")

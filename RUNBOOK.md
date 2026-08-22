@@ -85,13 +85,15 @@ Decision tree:
 
 ### Build fails ("Dockerfile does not exist" / wrong build)
 
-**Cause:** Railway's **Root Directory** is not set. The `Dockerfile`,
-`railway.json`, and `pyproject.toml` live in the `disastermind/` **subdirectory**,
-not at the git root. With Root Directory unset, Railway can't find the Dockerfile
-(or falls back to Nixpacks and builds the wrong thing).
+**Cause:** Railway is building with the wrong **Builder** (e.g. Nixpacks
+fallback). The `Dockerfile`, `railway.json`, and `pyproject.toml` all live at
+the **repository root** — do NOT set Root Directory to `disastermind/`; that
+subdirectory contains no build files (an earlier revision of this runbook said
+otherwise; that guidance was wrong and breaks the build).
 
-**Fix:** Service → **Settings → Source / Build → Root Directory = `disastermind`**.
-Confirm Builder = **Dockerfile**. Redeploy. This is the #1 gotcha; see DEPLOY.md §2.
+**Fix:** Service → **Settings → Source / Build**: leave **Root Directory empty**
+and set **Builder = Dockerfile**. Redeploy. See DEPLOY.md §2 for the canonical
+walkthrough.
 
 ### Empty dashboard (`messages_seen=0`, `/topics` all zeros)
 
@@ -241,7 +243,7 @@ this is a degraded-metrics condition, not an outage.
 5. **Inspect the audit trail** for what the system did (and approvals):
 
    ```bash
-   python -m disastermind verify-audit --audit ./audit.jsonl
+   python -m disastermind verify-audit ./audit.jsonl
    ```
 
    This verifies the hash-chain integrity of the local decision log. Also see the

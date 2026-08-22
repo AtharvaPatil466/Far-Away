@@ -7,11 +7,26 @@ dependency (PRD Step 10 graceful degradation — stdlib only).
 from __future__ import annotations
 
 import importlib
+import os
 from dataclasses import dataclass
 
 import pytest
 
-from disastermind.audit.decision_log import DecisionLogger
+# ---------------------------------------------------------------------------
+# HERMETIC SUITE GUARD — must run BEFORE any disastermind import below.
+#
+# A developer's shell (or the repo's own ``.env``) may legitimately carry
+# ``DM_LLM_PROVIDER=openrouter`` + a real ``OPENROUTER_API_KEY``. The
+# EscalationNarrator is wired into the default agent DAG, so any test that
+# publishes an ESCALATION would otherwise make a REAL, BLOCKING, PAID network
+# call from inside ``bus.publish`` (observed: a 15s+ hang per escalation).
+# Pinning the provider to the deterministic offline template keeps the whole
+# suite network-free; individual tests that specifically exercise provider
+# selection override this with monkeypatch.setenv as usual.
+# ---------------------------------------------------------------------------
+os.environ["DM_LLM_PROVIDER"] = "template"
+
+from disastermind.audit.decision_log import DecisionLogger  # noqa: E402
 from disastermind.core.bus import InMemoryBus
 from disastermind.core.config import Settings
 from disastermind.core.contracts import (

@@ -67,6 +67,15 @@ WORKDIR /app
 # Non-root runtime user (least privilege for the dashboard / loop process).
 RUN useradd --create-home --uid 10001 disastermind
 
+# Writable home for the hash-chained audit log. The default DM_AUDIT_LOG is
+# "./audit.jsonl" relative to CWD (/app), which is root-owned — a write from the
+# non-root uid would fail and every record would be silently dropped (only a
+# stderr traceback). Point the in-container default at /data instead and hand
+# that directory to the runtime user; operators can still override DM_AUDIT_LOG
+# (or mount a volume at /data) without rebuilding.
+ENV DM_AUDIT_LOG=/data/audit.jsonl
+RUN mkdir -p /data && chown -R disastermind:disastermind /data
+
 # Copy ONLY the prebuilt virtualenv and the package source from the builder; no
 # build toolchain, no pip cache, no project metadata leaks into the final image.
 COPY --from=builder --chown=disastermind:disastermind /opt/venv /opt/venv

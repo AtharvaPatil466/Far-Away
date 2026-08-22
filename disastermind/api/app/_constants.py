@@ -24,5 +24,8 @@ _DEFAULT_MAX_BODY = 1 * 1024 * 1024  # 1 MiB
 # WebSocket hardening defaults (overridable via env). A server-side heartbeat ping
 # every ``DM_WS_PING`` seconds prunes dead/half-open clients; ``DM_WS_MAX`` caps
 # concurrent live connections so a connection flood cannot exhaust the box.
+# ``DM_WS_QUEUE`` bounds each client's pending-message buffer: a slow reader
+# sheds its OLDEST queued updates instead of growing memory without bound.
 _DEFAULT_WS_PING = 20.0
 _DEFAULT_WS_MAX = 256
+_DEFAULT_WS_QUEUE = 512

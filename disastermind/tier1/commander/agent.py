@@ -23,6 +23,7 @@ audit-logged before publication (PRD Step 9).
 """
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -86,6 +87,12 @@ class CommanderAgent(BaseAgent):
         self.default_timeout = int(self.settings.escalation_timeout_seconds)
         self.matrix: dict[EscalationTrigger, AutonomyRule] = build_matrix(self.default_timeout)
         self.pending: dict[str, PendingEscalation] = {}
+        # Serialises the check→mutate→pop critical section of approve/reject/
+        # resolve_pending. Those run on DIFFERENT threads (the API worker pool
+        # vs the loop driver); without this lock a human approval landing
+        # exactly as a deadline expires can pass both status guards and emit
+        # Topic.DISPATCH twice — duplicating real-world dispatch orders.
+        self._action_lock = threading.Lock()
         # audit-friendly counters
         self.stats = {
             "dispatched": 0,
@@ -251,15 +258,24 @@ class CommanderAgent(BaseAgent):
         """
         now = self._now() if now_epoch is None else now_epoch
         emitted: list[Message] = []
-        for report_id, pending in list(self.pending.items()):
-            if pending.status != "pending" or not pending.is_due(now):
-                continue
-            if pending.decision.human_only:
-                # Never auto-execute. The escalation stays open until a human
-                # acts; we leave it pending (do not expire it).
-                continue
-            pending.status = "auto_executed"
-            self.stats["auto_executed"] += 1
+        # Claim due escalations under the lock (status check + pop atomic), then
+        # emit outside it so bus fan-out never holds the action lock. A claimed
+        # escalation is removed from ``pending`` first, so a racing approve/reject
+        # finds nothing to act on and cannot double-dispatch.
+        claims: list[tuple[str, PendingEscalation]] = []
+        with self._action_lock:
+            for report_id, pending in list(self.pending.items()):
+                if pending.status != "pending" or not pending.is_due(now):
+                    continue
+                if pending.decision.human_only:
+                    # Never auto-execute. The escalation stays open until a human
+                    # acts; we leave it pending (do not expire it).
+                    continue
+                pending.status = "auto_executed"
+                self.stats["auto_executed"] += 1
+                self.pending.pop(report_id, None)
+                claims.append((report_id, pending))
+        for report_id, pending in claims:
             msg = self._build_dispatch(
                 pending.order,
                 pending.decision,
@@ -271,7 +287,6 @@ class CommanderAgent(BaseAgent):
                 f"escalation {report_id} timed out after {pending.decision.timeout_seconds}s "
                 f"with no human response -> auto-executing (not human-only)"
             ] + msg.reasoning
-            self.pending.pop(report_id, None)
             self.emit(msg)
             emitted.append(msg)
         return emitted
@@ -286,11 +301,16 @@ class CommanderAgent(BaseAgent):
     # --------------------------------------------------------- human responses
     def approve(self, report_id: str, approver: str = "human") -> list[Message]:
         """Human approves a pending escalation -> dispatch now (PRD Step 7)."""
-        pending = self.pending.get(report_id)
-        if pending is None or pending.status != "pending":
-            return []
-        pending.status = "approved"
-        self.stats["approved"] += 1
+        # Atomically claim the escalation (status check + pop) so a concurrent
+        # timeout sweep or a duplicate POST cannot double-dispatch; the emit
+        # happens after the lock is released.
+        with self._action_lock:
+            pending = self.pending.get(report_id)
+            if pending is None or pending.status != "pending":
+                return []
+            pending.status = "approved"
+            self.stats["approved"] += 1
+            self.pending.pop(report_id, None)
         msg = self._build_dispatch(
             pending.order,
             pending.decision,
@@ -298,35 +318,35 @@ class CommanderAgent(BaseAgent):
             pending.module,
             via=f"human_approved:{approver}",
         )
-        self.pending.pop(report_id, None)
         self.emit(msg)
         return [msg]
 
     def reject(self, report_id: str, approver: str = "human", note: str = "") -> list[Message]:
         """Human rejects a pending escalation -> no dispatch; emit an ACK record."""
-        pending = self.pending.get(report_id)
-        if pending is None or pending.status != "pending":
-            return []
-        pending.status = "rejected"
-        self.stats["rejected"] += 1
-        ack = Message(
-            sender=self.name,
-            recipient="human_dashboard",
-            type=MessageType.ACK,
-            priority=Priority.HIGH,
-            topic=Topic.ESCALATION,
-            incident_id=pending.incident_id,
-            module=pending.module,
-            escalation_trigger=pending.decision.trigger,
-            reasoning=[f"escalation {report_id} REJECTED by {approver}: {note}".strip()],
-            payload={
-                "kind": "escalation_rejected",
-                "report_id": report_id,
-                "approver": approver,
-                "note": note,
-            },
-        )
-        self.pending.pop(report_id, None)
+        with self._action_lock:
+            pending = self.pending.get(report_id)
+            if pending is None or pending.status != "pending":
+                return []
+            pending.status = "rejected"
+            self.stats["rejected"] += 1
+            ack = Message(
+                sender=self.name,
+                recipient="human_dashboard",
+                type=MessageType.ACK,
+                priority=Priority.HIGH,
+                topic=Topic.ESCALATION,
+                incident_id=pending.incident_id,
+                module=pending.module,
+                escalation_trigger=pending.decision.trigger,
+                reasoning=[f"escalation {report_id} REJECTED by {approver}: {note}".strip()],
+                payload={
+                    "kind": "escalation_rejected",
+                    "report_id": report_id,
+                    "approver": approver,
+                    "note": note,
+                },
+            )
+            self.pending.pop(report_id, None)
         self.emit(ack)
         return [ack]
 

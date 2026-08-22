@@ -113,6 +113,55 @@ class Message:
         )
         return d
 
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Message:
+        """Rebuild a :class:`Message` from :meth:`to_dict` output (defensive).
+
+        The Kafka consumer path depends on this round-trip: without it every
+        consumed record was silently discarded. Unknown enum values fall back to
+        safe defaults rather than raising, and a missing/None ``d`` yields a
+        minimal valid envelope so a partial record degrades instead of crashing
+        the consumer loop.
+        """
+        data = dict(d or {})
+
+        def _enum(enum_cls, raw, default):
+            try:
+                return enum_cls(raw)
+            except (ValueError, TypeError):
+                return default
+
+        mtype = _enum(MessageType, data.get("type"), MessageType.ALERT)
+        try:
+            priority = Priority(int(data.get("priority", Priority.INFO)))
+        except (ValueError, TypeError):
+            priority = Priority.INFO
+        module = _enum(Module, data.get("module"), Module.ALL)
+
+        trig_raw = data.get("escalation_trigger")
+        trigger: EscalationTrigger | None = None
+        if trig_raw is not None:
+            candidate = _enum(EscalationTrigger, trig_raw, None)
+            trigger = candidate
+
+        payload = data.get("payload")
+        reasoning = data.get("reasoning")
+        return cls(
+            sender=str(data.get("sender") or "unknown"),
+            recipient=str(data.get("recipient") or "unknown"),
+            type=mtype,
+            priority=priority,
+            payload=payload if isinstance(payload, dict) else {},
+            reasoning=[str(r) for r in reasoning] if isinstance(reasoning, list) else [],
+            ttl_seconds=int(data.get("ttl_seconds", 300) or 0) or 300,
+            topic=str(data.get("topic") or "default"),
+            incident_id=data.get("incident_id"),
+            module=module,
+            escalation_trigger=trigger,
+            timestamp=str(data.get("timestamp") or utcnow_iso()),
+            id=str(data.get("id") or str(uuid.uuid4())),
+        )
+
     def reply(
         self,
         sender: str,

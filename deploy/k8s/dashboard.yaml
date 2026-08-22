@@ -1,11 +1,11 @@
 # DisasterMind Commander Dashboard (PRD Step 7 + Step 10).
 #
-# Serves the FastAPI/WebSocket transport from disastermind/api/app.py via its
-# create_app() factory. The dashboard logically corresponds to running the api
-# package (``python -m disastermind.api``); concretely it is served by uvicorn
-# against the create_app application factory (FastAPI is an optional, lazily
-# imported dependency — see HARD RULE 2 — so the image must be built with the
-# extras that include fastapi/uvicorn, e.g. `docker build --build-arg EXTRAS=...`).
+# Runs the api package's serving entrypoint (`python -m disastermind.api`). That
+# wrapper assembles the FULL transport — create_app() routes plus the static UI,
+# the opt-in API-key/rate-limit security middleware, CORS and the background
+# loop-driver thread. Launching uvicorn directly against the bare create_app
+# factory would silently skip all of those (auth unenforced, dashboard dead at
+# messages_seen=0), so don't.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,31 +28,29 @@ spec:
         - name: api
           image: disastermind:latest
           imagePullPolicy: IfNotPresent
-          # Serve the dashboard (PRD Step 7). Equivalent to running the api
-          # package; uvicorn binds the create_app() FastAPI factory.
-          command: ["uvicorn"]
+          # Serve the dashboard via the package entrypoint (binds $PORT on 0.0.0.0).
+          command: ["python"]
           args:
-            - "disastermind.api:create_app"
-            - "--factory"
-            - "--host"
-            - "0.0.0.0"
-            - "--port"
-            - "8000"
+            - "-m"
+            - "disastermind.api"
           ports:
             - name: http
               containerPort: 8000
           envFrom:
             - configMapRef:
                 name: disastermind-config
+          volumeMounts:
+            - name: audit-data
+              mountPath: /data
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readyz
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /healthz
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20
@@ -63,6 +61,12 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+      volumes:
+        # Writable home for the hash-chained audit log (DM_AUDIT_LOG=/data/audit.jsonl
+        # in the configmap). emptyDir survives restarts of the container within a
+        # pod; use a PVC if the trail must survive pod rescheduling.
+        - name: audit-data
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
