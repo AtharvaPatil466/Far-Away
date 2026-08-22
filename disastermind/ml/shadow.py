@@ -147,7 +147,17 @@ class ShadowJournal:
 
 
 # ------------------------------------------------------------------------- scoring
-def score_season(journal: ShadowJournal) -> dict[str, Any]:
+#: A season needs BOTH a floor of settled outcomes AND at least one positive
+#: before any skill metric means anything. Below either bar the undefined values
+#: are indistinguishable from measured catastrophe -- ``roc_auc`` returns a 0.5
+#: sentinel with no positives, and ``confusion_at`` yields POD 0.0 / FAR 1.0 --
+#: so the scorecard reports WHY it cannot score instead of emitting them.
+MIN_SETTLED_N = 30
+
+
+def score_season(
+    journal: ShadowJournal, *, min_settled_n: int = MIN_SETTLED_N
+) -> dict[str, Any]:
     """Join predictions to outcomes and emit the shadow-season scorecard.
 
     Every prediction appears in exactly one bucket: resolved (scored) or
@@ -174,25 +184,45 @@ def score_season(journal: ShadowJournal) -> dict[str, Any]:
         "unresolved_ids": sorted(unresolved),
         "chain_verified": True,
     }
-    if resolved:
-        y = [1 if o["occurred"] else 0 for _, o in resolved]
-        p = [pr["probability"] for pr, _ in resolved]
-        # The operating threshold was declared per prediction, live; the season
-        # is scored at the median declared threshold (and it is reported).
-        thresholds = sorted(pr["threshold"] for pr, _ in resolved)
-        threshold = thresholds[len(thresholds) // 2]
-        bins = calibration_bins(y, p, n_bins=10)
+    if not resolved:
+        scorecard.update({"scoreable": False, "reason": "no settled outcomes yet"})
+        return scorecard
+
+    y = [1 if o["occurred"] else 0 for _, o in resolved]
+    p = [pr["probability"] for pr, _ in resolved]
+    n_positive = sum(y)
+    if len(resolved) < min_settled_n or n_positive == 0:
         scorecard.update(
             {
-                "threshold": threshold,
-                "confusion": confusion_at(y, p, threshold).to_dict(),
-                "auc": roc_auc(y, p),
-                "brier": brier_score(y, p),
-                "ece": expected_calibration_error(bins),
-                "reliability": [b.to_dict() for b in bins if b.count],
-                "base_rate": sum(y) / len(y),
+                "scoreable": False,
+                "reason": (
+                    f"scoring requires a season: {len(resolved)} settled "
+                    f"(need {min_settled_n}), {n_positive} positive (need 1)"
+                ),
+                "n_positive": n_positive,
+                "min_settled_n": min_settled_n,
             }
         )
+        return scorecard
+
+    # The operating threshold was declared per prediction, live; the season
+    # is scored at the median declared threshold (and it is reported).
+    thresholds = sorted(pr["threshold"] for pr, _ in resolved)
+    threshold = thresholds[len(thresholds) // 2]
+    bins = calibration_bins(y, p, n_bins=10)
+    scorecard.update(
+        {
+            "threshold": threshold,
+            "confusion": confusion_at(y, p, threshold).to_dict(),
+            "auc": roc_auc(y, p),
+            "brier": brier_score(y, p),
+            "ece": expected_calibration_error(bins),
+            "reliability": [b.to_dict() for b in bins if b.count],
+            "base_rate": sum(y) / len(y),
+            "n_positive": n_positive,
+            "scoreable": True,
+        }
+    )
     return scorecard
 
 
