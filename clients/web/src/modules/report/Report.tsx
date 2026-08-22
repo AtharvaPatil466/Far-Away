@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReportConfig from './components/ReportConfig'
 import ReportViewer from './components/ReportViewer'
 import {
@@ -8,6 +8,11 @@ import {
   type ReportSection,
 } from './lib/anthropic'
 import { incidents, reportSections, type Incident } from './lib/incidents'
+import {
+  AFFECTED_SITE_EVIDENCE_SECTION,
+  includedSiteEvidence,
+  type SiteEvidenceImage,
+} from './lib/siteEvidence'
 
 export function Report() {
   const [view, setView] = useState<'config' | 'viewer'>('config')
@@ -18,6 +23,17 @@ export function Report() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [sections, setSections] = useState<ReportSection[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [siteEvidence, setSiteEvidence] = useState<SiteEvidenceImage[]>([])
+  const [reportEvidence, setReportEvidence] = useState<SiteEvidenceImage[]>([])
+  const siteEvidenceRef = useRef<SiteEvidenceImage[]>([])
+
+  useEffect(() => {
+    siteEvidenceRef.current = siteEvidence
+  }, [siteEvidence])
+
+  useEffect(() => () => {
+    siteEvidenceRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl))
+  }, [])
 
   const toggleSection = (section: string) => {
     setCheckedSections((current) =>
@@ -29,8 +45,30 @@ export function Report() {
 
   const input = {
     incident: selectedIncident,
-    sections: checkedSections,
+    sections: checkedSections.filter((section) => section !== AFFECTED_SITE_EVIDENCE_SECTION),
     audience,
+  }
+
+  const addSiteEvidence = (files: File[]) => {
+    const newImages = files.map<SiteEvidenceImage>((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+      filename: file.name,
+      size: file.size,
+      included: true,
+    }))
+    setSiteEvidence((current) => [...current, ...newImages])
+  }
+
+  const updateSiteEvidence = (id: string, updates: Partial<SiteEvidenceImage>) => {
+    setSiteEvidence((current) => current.map((image) => image.id === id ? { ...image, ...updates } : image))
+  }
+
+  const removeSiteEvidence = (id: string) => {
+    const image = siteEvidence.find((item) => item.id === id)
+    if (image) URL.revokeObjectURL(image.previewUrl)
+    setSiteEvidence((current) => current.filter((item) => item.id !== id))
   }
 
   const handleGenerate = async () => {
@@ -39,6 +77,10 @@ export function Report() {
     setIsGenerating(true)
     setError(null)
     setSections([])
+    setReportEvidence(includedSiteEvidence(
+      siteEvidence,
+      checkedSections.includes(AFFECTED_SITE_EVIDENCE_SECTION),
+    ))
 
     try {
       const text = await generateReport(input)
@@ -68,10 +110,14 @@ export function Report() {
           checkedSections={checkedSections}
           isGenerating={isGenerating}
           onAudienceChange={setAudience}
+          onEvidenceAdd={addSiteEvidence}
+          onEvidenceRemove={removeSiteEvidence}
+          onEvidenceUpdate={updateSiteEvidence}
           onGenerate={handleGenerate}
           onIncidentChange={setSelectedIncident}
           onSectionToggle={toggleSection}
           selectedIncident={selectedIncident}
+          siteEvidence={siteEvidence}
         />
       ) : (
         <ReportViewer
@@ -82,6 +128,7 @@ export function Report() {
           isLoading={isGenerating}
           onNewReport={handleNewReport}
           sections={sections}
+          siteEvidence={reportEvidence}
         />
       )}
     </div>

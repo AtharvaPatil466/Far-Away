@@ -127,12 +127,35 @@ export interface EscalationMemo {
   riskIfNo: string;       // 1-sentence consequence
 }
 
+export interface DecisionEvidenceFactor {
+  label: string;
+  impact: string;
+}
+
+/**
+ * Optional frontend evidence for human review. `source` makes demo evidence
+ * visibly distinct until the backend supplies an equivalent payload.
+ */
+export interface DecisionEvidence {
+  source: 'demo' | 'live';
+  riskScore: number;
+  confidence: number;
+  recommendedAction: string;
+  authorityLevel: string;
+  authorityRule: string;
+  topFactors: DecisionEvidenceFactor[];
+  riskIfApproved: string;
+  riskIfRejected: string;
+  agentPath: string[];
+}
+
 export interface EscalationItem {
   id: string;
   trigger: EscalationTrigger;
   zone: string;
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM';
   memo: EscalationMemo;
+  decisionEvidence?: DecisionEvidence;
   createdAt: number;       // Date.now() timestamp
   timeoutMs: number;       // default 300000 (5 min); Infinity for HUMAN_ONLY
   status: 'PENDING' | 'APPROVED' | 'OVERRIDDEN' | 'AUTO_EXECUTED';

@@ -65,13 +65,13 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
   return (
     <div className="h-screen w-full overflow-hidden bg-background text-on-surface antialiased">
       {/* ── SideNavBar — 72px icon rail ──────────────────────────────── */}
-      <nav className="fixed left-0 top-0 z-50 flex h-full w-[72px] flex-col items-center border-r border-outline-variant bg-surface-container-lowest py-6">
+      <nav className="fixed left-0 top-0 z-50 flex h-full w-[72px] flex-col items-center border-r border-outline-variant bg-surface py-6">
         <div className="flex w-full flex-1 flex-col items-center gap-8">
           <button
             type="button"
             onClick={() => onChange('dashboard')}
             aria-label="DisasterMind home"
-            className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-container-high text-primary transition-[background-color,transform] hover:bg-surface-container-highest active:scale-90"
+            className="flex h-12 w-12 items-center justify-center rounded border border-outline-variant bg-surface text-primary transition-colors hover:border-primary"
           >
             <Icon name="hub" filled className="text-[28px]" />
           </button>
@@ -88,10 +88,10 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
                   aria-label={item.label}
                   title={item.label}
                   className={cn(
-                    'group relative flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl transition-all duration-150 active:scale-90',
+                    'group relative flex aspect-square w-full flex-col items-center justify-center gap-1 rounded transition-colors duration-150',
                     isActive
-                      ? 'scale-95 bg-primary-container/10 text-primary'
-                      : 'text-on-surface-variant hover:-translate-y-px hover:bg-surface-container-high hover:text-primary',
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
                     flashing && 'animate-pulse bg-error/10 text-error',
                   )}
                 >
@@ -112,18 +112,18 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
           <button
             type="button"
             aria-label="Settings"
-            className="flex aspect-square w-full items-center justify-center rounded-xl text-on-surface-variant transition-[background-color,color,transform] hover:bg-surface-container-high hover:text-primary active:scale-90"
+            className="flex aspect-square w-full items-center justify-center rounded text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary"
           >
             <Icon name="settings" className="text-[22px]" />
           </button>
           <button
             type="button"
             aria-label="Support"
-            className="flex aspect-square w-full items-center justify-center rounded-xl text-on-surface-variant transition-[background-color,color,transform] hover:bg-surface-container-high hover:text-primary active:scale-90"
+            className="flex aspect-square w-full items-center justify-center rounded text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary"
           >
             <Icon name="help_outline" className="text-[22px]" />
           </button>
-          <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-outline-variant bg-surface-container-high text-label-sm text-on-surface-variant">
+          <div className="mt-1 flex h-10 w-10 items-center justify-center rounded border border-outline-variant bg-surface font-mono text-label-sm text-on-surface-variant">
             C7
           </div>
         </div>
@@ -136,7 +136,7 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
           {/* Brand + search */}
           <div className="flex h-full items-center gap-8">
             <div className="flex flex-col justify-center">
-              <h1 className="text-headline-md font-bold tracking-tight text-primary">DisasterMind</h1>
+              <h1 className="text-headline-md font-normal tracking-[-0.03em] text-on-surface">DisasterMind</h1>
               <span className="font-mono text-code-sm text-on-surface-variant">CMD-CNTR-01</span>
             </div>
             <div className="relative hidden w-64 lg:block">
@@ -147,7 +147,7 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
               <input
                 type="text"
                 placeholder="Search operations…"
-                className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest py-2 pl-10 pr-4 text-body-sm text-on-surface transition-colors placeholder:text-on-surface-variant/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded border border-outline-variant bg-transparent py-2 pl-10 pr-4 text-body-sm text-on-surface transition-colors placeholder:text-on-surface-variant focus:border-primary focus:outline-2 focus:outline-offset-2 focus:outline-primary"
               />
             </div>
           </div>
@@ -159,7 +159,7 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
             </span>
             <span
               className={cn(
-                'hidden items-center gap-2 rounded-lg border px-3 py-1.5 text-label-xs uppercase lg:inline-flex',
+                'hidden items-center gap-2 rounded border px-3 py-1.5 font-mono text-label-xs uppercase lg:inline-flex',
                 cyclone === 'red'
                   ? 'border-secondary/40 bg-secondary/10 text-secondary'
                   : 'border-warning/40 bg-warning/10 text-warning',
@@ -175,7 +175,7 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
             </span>
             <button
               type="button"
-              className="hidden items-center gap-2 rounded-lg border border-secondary px-4 py-2 text-label-xs uppercase text-secondary transition-[background-color,transform] hover:bg-secondary/10 active:scale-[0.97] lg:flex"
+              className="hidden items-center gap-2 rounded border border-secondary px-4 py-2 font-mono text-label-xs uppercase text-secondary transition-colors hover:bg-secondary/10 lg:flex"
             >
               <Icon name="campaign" className="text-[16px]" />
               Emergency Broadcast
@@ -183,7 +183,7 @@ export function CommandShell({ activeModule, onChange, children }: CommandShellP
             <button
               type="button"
               onClick={() => onChange('escalation')}
-              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-label-xs font-bold uppercase text-on-primary shadow-[inset_0_1px_1px_rgba(255,255,255,0.4)] transition-[filter,transform] hover:brightness-110 active:scale-[0.97]"
+              className="flex items-center gap-2 rounded bg-primary px-4 py-2 font-mono text-label-xs font-bold uppercase text-on-primary transition-colors hover:bg-primary-fixed-dim focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
               <Icon name="groups" className="text-[16px]" />
               Deploy Personnel

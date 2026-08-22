@@ -1,15 +1,21 @@
 import { CheckCircle2, FileText, Users } from 'lucide-react'
 import { audiences, incidents, reportSections, type Incident } from '../lib/incidents'
+import type { SiteEvidenceImage } from '../lib/siteEvidence'
+import SiteEvidenceSection from './SiteEvidenceSection'
 
 type ReportConfigProps = {
   selectedIncident: Incident
   checkedSections: string[]
   audience: string
   isGenerating: boolean
+  siteEvidence: SiteEvidenceImage[]
   onIncidentChange: (incident: Incident) => void
   onSectionToggle: (section: string) => void
   onAudienceChange: (audience: string) => void
   onGenerate: () => void
+  onEvidenceAdd: (files: File[]) => void
+  onEvidenceUpdate: (id: string, updates: Partial<SiteEvidenceImage>) => void
+  onEvidenceRemove: (id: string) => void
 }
 
 export default function ReportConfig({
@@ -17,10 +23,14 @@ export default function ReportConfig({
   checkedSections,
   audience,
   isGenerating,
+  siteEvidence,
   onIncidentChange,
   onSectionToggle,
   onAudienceChange,
   onGenerate,
+  onEvidenceAdd,
+  onEvidenceUpdate,
+  onEvidenceRemove,
 }: ReportConfigProps) {
   return (
     <main className="config-page">
@@ -61,6 +71,13 @@ export default function ReportConfig({
             ))}
           </div>
         </section>
+
+        <SiteEvidenceSection
+          images={siteEvidence}
+          onAddFiles={onEvidenceAdd}
+          onUpdate={onEvidenceUpdate}
+          onRemove={onEvidenceRemove}
+        />
 
         <section className="config-panel two-column">
           <div>

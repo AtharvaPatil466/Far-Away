@@ -57,16 +57,16 @@ export function DeploymentsTable({ teams }: { teams: Record<string, GpsReading> 
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
-          <TableRow className="border-outline-variant/15 bg-surface-container-low hover:bg-transparent">
-            <TableHead>Unit ID</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Location</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Duration</TableHead>
+          <TableRow className="border-outline-variant bg-transparent hover:bg-transparent">
+            <TableHead className="font-mono">Unit ID</TableHead>
+            <TableHead className="font-mono">Assignment</TableHead>
+            <TableHead className="font-mono">Sector</TableHead>
+            <TableHead className="font-mono">Status</TableHead>
+            <TableHead className="text-right font-mono">Duration</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((team, i) => {
+          {rows.map((team) => {
             const meta = TEAM_META[team.team_id] ?? {
               type: 'Field Unit',
               base: team.location
@@ -75,24 +75,17 @@ export function DeploymentsTable({ teams }: { teams: Record<string, GpsReading> 
             }
             const status = STATUS_META[team.status] ?? OFFLINE
             return (
-              <TableRow
-                key={team.team_id}
-                className={cn(
-                  'hover:bg-surface/60',
-                  i % 2 === 0 ? 'bg-surface/20' : 'bg-surface',
-                )}
-              >
-                <TableCell className="font-mono text-data-mono tabular-nums text-primary">
+              <TableRow key={team.team_id} className="border-outline-variant/70 bg-transparent hover:bg-surface-container/40">
+                <TableCell className="font-mono text-data-mono tabular-nums text-on-surface">
                   {team.team_id}
                 </TableCell>
-                <TableCell>{meta.type}</TableCell>
-                <TableCell>{meta.base}</TableCell>
+                <TableCell className="text-on-surface">{meta.type}</TableCell>
+                <TableCell className="text-on-surface-variant">{meta.base}</TableCell>
                 <TableCell>
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1.5 rounded border bg-surface px-2 py-0.5 text-label-sm uppercase',
+                      'inline-flex items-center gap-1.5 font-mono text-label-sm uppercase',
                       status.text,
-                      status.border,
                     )}
                   >
                     <span className={cn('h-1.5 w-1.5 rounded-full', status.dot, status.pulse && 'animate-pulse')} />

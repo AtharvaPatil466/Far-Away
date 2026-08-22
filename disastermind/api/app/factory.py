@@ -244,6 +244,22 @@ def create_app(
 
     _route("/validation/cyclone", validation_cyclone, methods=["GET"])
 
+    # ------------------------------------------------ live shadow evidence ledger
+    def live_evidence() -> Any:
+        """Expose the real append-only USGS shadow journal without a fake fallback."""
+        try:
+            from ..live_evidence import build_live_evidence_snapshot
+
+            return build_live_evidence_snapshot()
+        except (FileNotFoundError, OSError, ValueError):
+            log.exception("live shadow evidence unavailable")
+            return JSONResponse(
+                {"error": "live shadow evidence unavailable", "classification": "UNAVAILABLE"},
+                status_code=503,
+            )
+
+    _route("/evidence/live", live_evidence, methods=["GET"])
+
     # ------------------------------------------------ post-incident report (Step 9)
     def report_generate() -> Any:
         """Generate a post-incident report from the live system's audit + bus.
@@ -393,6 +409,12 @@ def create_app(
         return _paginate(rows, limit, offset)
 
     _route("/audit/search", audit_search, methods=["GET"])
+
+    def audit_verify() -> dict[str, Any]:
+        """Read-only verification of the Commander's existing decision journal."""
+        return svc.verify_audit()
+
+    _route("/audit/verify", audit_verify, methods=["GET"])
 
     # ----------------------------------------------------- escalation actions
     def approve(

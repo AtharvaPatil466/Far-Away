@@ -59,6 +59,7 @@ export const incidents: Incident[] = [
 ]
 
 export const reportSections = [
+  AFFECTED_SITE_EVIDENCE_SECTION,
   'Event Timeline',
   'Autonomous Decision Log',
   'Human Override Analysis',
@@ -90,3 +91,4 @@ export const audiences = [
     detail: 'anonymised',
   },
 ]
+import { AFFECTED_SITE_EVIDENCE_SECTION } from './siteEvidence'

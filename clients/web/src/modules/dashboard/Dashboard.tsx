@@ -1,16 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useApiStatus } from '@/hooks/useApiStatus'
 import { useEscalations } from '@/hooks/useEscalations'
 import { connectWebSocket } from '@/lib/disasterApi'
 import { SYNTHETIC_MAP_STATE } from '@/lib/mapTypes'
 import type { MapState, EscalationItem } from '@/lib/mapTypes'
-import { Card, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Icon } from '@/components/ui/icon'
-import { cn } from '@/lib/utils'
-import { LiveMap } from './components/LiveMap'
+import type { SystemStatusSnapshot } from '@/lib/systemStatus'
+import {
+  GOLDEN_DEMO_ESCALATION,
+  GOLDEN_DEMO_STEPS,
+  INITIAL_GOLDEN_DEMO_STATE,
+  goldenDemoAgentTrace,
+  nextGoldenDemoStep,
+} from '@/lib/goldenDemo'
 import { DeploymentsTable } from './components/DeploymentsTable'
+import { AgentTrace, type AgentTraceStage } from './components/AgentTrace'
+import { DecisionEvidenceDrawer } from './components/DecisionEvidenceDrawer'
+import { GoldenDemoControls } from './components/GoldenDemoControls'
+import { IncidentHero } from './components/IncidentHero'
+import { MissionTelemetry } from './components/MissionTelemetry'
+import { DecisionBrief } from './components/DecisionBrief'
+import { TrustStrip } from './components/TrustStrip'
+import { AuthorizationReceipt } from './components/AuthorizationReceipt'
+import { commanderStageForApproval } from './lib/approvalFlow'
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -23,136 +34,28 @@ function useNow(intervalMs = 1000) {
   return now
 }
 
-const PRIORITY_META: Record<
-  EscalationItem['priority'],
-  { label: string; border: string; text: string }
-> = {
-  CRITICAL: { label: 'Priority 1', border: 'border-l-error', text: 'text-error' },
-  HIGH: { label: 'Priority 2', border: 'border-l-secondary', text: 'text-secondary' },
-  MEDIUM: { label: 'Priority 3', border: 'border-l-tertiary', text: 'text-tertiary' },
-}
-
-const TRIGGER_ICON: Record<string, string> = {
-  MANDATORY_EVACUATION: 'crisis_alert',
-  CROSS_STATE_RESOURCE: 'local_shipping',
-  REQUISITION_INFRASTRUCTURE: 'apartment',
-  CRITICAL_INFRASTRUCTURE: 'electric_bolt',
-  MEDIA_BROADCAST: 'campaign',
-  ARMED_FORCES: 'shield',
-}
-
-function countdown(item: EscalationItem, now: number): string {
-  if (item.timeoutMs === Infinity) return 'MANUAL'
-  const remaining = item.timeoutMs - (now - item.createdAt)
-  if (remaining <= 0) return 'EXPIRED'
-  const total = Math.floor(remaining / 1000)
-  const m = String(Math.floor(total / 60)).padStart(2, '0')
-  const s = String(total % 60).padStart(2, '0')
-  return `T-${m}:${s}`
-}
-
-/* ------------------------------------------------------------ KPI card */
-
-interface KpiProps {
-  label: string
-  value: number | string
-  icon: string
-  hint: string
-  hintIcon: string
-  tone?: 'default' | 'critical'
-}
-
-function KpiCard({ label, value, icon, hint, hintIcon, tone = 'default' }: KpiProps) {
-  const critical = tone === 'critical'
-  return (
-    <Card
-      className={cn(
-        'dm-lift flex flex-col justify-between p-4',
-        critical && 'border-error/20 bg-error-container/30',
-      )}
-    >
-      <div className="mb-2 flex items-start justify-between">
-        <span
-          className={cn(
-            'text-label-md uppercase',
-            critical ? 'text-on-error-container' : 'text-on-surface-variant',
-          )}
-        >
-          {label}
-        </span>
-        <Icon name={icon} className={cn('text-[22px]', critical ? 'text-on-error-container' : 'text-primary')} />
-      </div>
-      <div
-        className={cn(
-          'text-headline-lg',
-          critical ? 'text-on-error-container' : 'text-primary',
-        )}
-      >
-        {value}
-      </div>
-      <div
-        className={cn(
-          'mt-1 flex items-center gap-1 text-body-sm',
-          critical ? 'text-on-error-container' : 'text-on-surface-variant',
-        )}
-      >
-        <Icon name={hintIcon} className="text-[16px]" />
-        {hint}
-      </div>
-    </Card>
-  )
-}
-
-/* ------------------------------------------------ escalation queue item */
-
-interface QueueItemProps {
-  item: EscalationItem
-  now: number
-  onDispatch: (id: string) => void
-  onAcknowledge: (id: string) => void
-}
-
-function QueueItem({ item, now, onDispatch, onAcknowledge }: QueueItemProps) {
-  const meta = PRIORITY_META[item.priority]
-  const icon = TRIGGER_ICON[item.trigger] ?? 'warning'
-  return (
-    <div
-      className={cn(
-        'dm-press cursor-pointer rounded border border-l-4 border-outline-variant/30 bg-surface p-3 hover:bg-surface-container-highest',
-        meta.border,
-      )}
-    >
-      <div className="mb-1 flex items-start justify-between gap-2">
-        <span className={cn('flex items-center gap-1.5 text-label-md uppercase', meta.text)}>
-          <Icon name={icon} className="text-[16px]" />
-          {meta.label} · {item.trigger.replace(/_/g, ' ').toLowerCase()}
-        </span>
-        <span className="shrink-0 font-mono text-label-sm tabular-nums text-on-surface-variant">
-          {countdown(item, now)}
-        </span>
-      </div>
-      <h3 className="mb-1 text-body-md font-bold text-primary">{item.zone}</h3>
-      <p className="line-clamp-2 text-body-sm text-on-surface-variant">{item.memo.situation}</p>
-      {item.status === 'PENDING' && (
-        <div className="mt-2 flex gap-2">
-          <Button size="sm" variant="accent" onClick={() => onDispatch(item.id)}>
-            Dispatch
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => onAcknowledge(item.id)}>
-            Acknowledge
-          </Button>
-        </div>
-      )}
-    </div>
-  )
-}
+const DEMO_AGENT_STAGES: readonly AgentTraceStage[] = [
+  { id: 'ingestion', label: 'Ingestion', icon: 'sensors', state: 'complete' },
+  { id: 'prediction', label: 'Prediction', icon: 'analytics', state: 'complete' },
+  { id: 'cascade', label: 'Cascade', icon: 'account_tree', state: 'complete' },
+  { id: 'resource', label: 'Resource', icon: 'inventory_2', state: 'complete' },
+  { id: 'routing', label: 'Routing', icon: 'route', state: 'complete' },
+  { id: 'commander', label: 'Commander', icon: 'person', state: 'waiting' },
+]
 
 /* ------------------------------------------------------------- Dashboard */
 
 export function Dashboard() {
   const { status, setWsState } = useApiStatus()
-  const { escalations, pending, approve, overrideItem } = useEscalations()
+  const { escalations, pending, approve, overrideItem, dataSource, lastAuthorization, clearAuthorization } = useEscalations()
   const [mapState, setMapState] = useState<MapState>(SYNTHETIC_MAP_STATE)
+  const [reviewingItem, setReviewingItem] = useState<EscalationItem | null>(null)
+  const [goldenDemo, setGoldenDemo] = useState(INITIAL_GOLDEN_DEMO_STATE)
+  const closeDecisionReview = useCallback(() => setReviewingItem(null), [])
+  const reviewDecision = useCallback((item: EscalationItem) => {
+    clearAuthorization()
+    setReviewingItem(item)
+  }, [clearAuthorization])
   const now = useNow(1000)
 
   // ── Live telemetry: drive the map + unit positions from the Group A socket
@@ -225,114 +128,146 @@ export function Dashboard() {
     [mapState.riskCells],
   )
   const criticalCount = pending.filter((e) => e.priority === 'CRITICAL').length
+  const topCritical = pending.find((item) => item.priority === 'CRITICAL') ?? null
+  const districtCount = useMemo(() => {
+    for (const item of pending) {
+      const match = item.memo.situation.match(/(\d+)\s+districts?\s+affected/i)
+      if (match) return Number(match[1])
+    }
+    return null
+  }, [pending])
+  const districtWords: Record<number, string> = { 1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six' }
+  const incidentHeadline = districtCount
+    ? `${districtWords[districtCount] ?? districtCount} districts escalating.`
+    : criticalCount > 0
+      ? `${criticalCount} critical ${criticalCount === 1 ? 'decision' : 'decisions'} pending.`
+      : 'Response operations active.'
+  const mapStatus = wsLive
+    ? { label: 'Live map', tone: 'healthy' as const }
+    : status.wsState === 'offline'
+      ? { label: 'Map channel offline', tone: 'critical' as const }
+      : { label: status.wsState === 'connecting' ? 'Map connecting' : 'Map reconnecting', tone: 'degraded' as const }
+  const systemStatus: SystemStatusSnapshot = {
+    backend: status.backendState,
+    dataSource,
+    audit: 'unknown',
+    agents: status.agentsState,
+    feed: 'unknown',
+  }
+  const goldenDemoMeta = goldenDemo.step === 'idle' ? null : GOLDEN_DEMO_STEPS[goldenDemo.step]
+  const traceStages = goldenDemo.step === 'idle'
+    ? DEMO_AGENT_STAGES.map((stage) => stage.id === 'commander'
+      ? { ...stage, state: commanderStageForApproval(lastAuthorization) }
+      : stage)
+    : goldenDemoAgentTrace(goldenDemo.step)
+  const clock = new Date(now).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+
+  const startGoldenDemo = () => {
+    setReviewingItem(null)
+    setGoldenDemo({ step: 'incident_detected', decision: 'pending' })
+  }
+
+  const advanceGoldenDemo = () => {
+    const nextStep = nextGoldenDemoStep(goldenDemo.step)
+    setGoldenDemo((current) => ({ ...current, step: nextStep }))
+    if (nextStep === 'commander_review') setReviewingItem(GOLDEN_DEMO_ESCALATION)
+  }
+
+  const resetGoldenDemo = () => {
+    setReviewingItem(null)
+    setGoldenDemo(INITIAL_GOLDEN_DEMO_STATE)
+  }
+
+  const approveReviewedDecision = async (id: string): Promise<{ ok: boolean; error?: string }> => {
+    if (id === GOLDEN_DEMO_ESCALATION.id) {
+      setGoldenDemo({ step: 'completed', decision: 'approved' })
+      return { ok: true }
+    }
+    const result = await approve(id)
+    if (result) return { ok: true }
+    return {
+      ok: false,
+      error: dataSource === 'live'
+        ? 'The backend did not confirm dispatch and audit append. Review remains required.'
+        : 'This is fallback decision data. Start the backend and review a live escalation to authorize a real dispatch.',
+    }
+  }
+
+  const rejectReviewedDecision = (id: string) => {
+    if (id === GOLDEN_DEMO_ESCALATION.id) {
+      setGoldenDemo((current) => ({ ...current, decision: 'rejected' }))
+      return
+    }
+    overrideItem(id, 'Rejected after decision evidence review')
+  }
 
   return (
-    <div className="dm-scroll h-full overflow-y-auto bg-surface p-gutter md:p-margin-desktop">
-      <div className="dm-stagger mx-auto flex h-full max-w-[1440px] flex-col gap-6">
-        {/* Header */}
-        <div className="flex shrink-0 flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <h1 className="text-headline-lg text-primary">Commander Dashboard</h1>
-            <p className="mt-1 text-body-md text-on-surface-variant">
-              Sector 7 Command · Cyclone Remal Response · Odisha Coast
-            </p>
-          </div>
-          <Badge variant={status.backendOnline ? 'success' : 'warning'} className="self-start md:self-auto">
-            <span
-              className={cn(
-                'h-2 w-2 rounded-full',
-                status.backendOnline ? 'animate-pulse bg-success' : 'bg-on-tertiary-container',
-              )}
+    <div className="dm-scroll h-full overflow-y-auto overflow-x-hidden bg-surface">
+      <div className="mx-auto w-full max-w-[1600px] px-4 pb-inversa-59 pt-4 md:px-6 md:pt-6 xl:px-8">
+        <IncidentHero
+          mapState={mapState}
+          dataSource={dataSource}
+          headline={incidentHeadline}
+          criticalCount={criticalCount}
+          mapStatus={mapStatus}
+          clock={clock}
+          onReviewCritical={() => topCritical && reviewDecision(topCritical)}
+          demoControls={(
+            <GoldenDemoControls
+              step={goldenDemo.step}
+              decision={goldenDemo.decision}
+              current={goldenDemoMeta}
+              onStart={startGoldenDemo}
+              onNext={advanceGoldenDemo}
+              onReset={resetGoldenDemo}
+              onReviewDecision={() => setReviewingItem(GOLDEN_DEMO_ESCALATION)}
             />
-            {status.backendOnline ? 'Group A Backend Live' : 'Simulation Mode'}
-          </Badge>
-        </div>
+          )}
+        />
 
-        {/* KPI row */}
-        <div className="grid shrink-0 grid-cols-1 gap-6 md:grid-cols-3">
-          <KpiCard
-            label="Active Incidents"
-            value={highRiskZones}
-            icon="local_fire_department"
-            hintIcon="arrow_upward"
-            hint={`${mapState.riskCells.length} risk zones tracked`}
-          />
-          <KpiCard
-            label="Units Deployed"
-            value={unitCount}
-            icon="groups"
-            hintIcon="check_circle"
-            hint={`${activeUnits} active · ${unitCount - activeUnits} staged`}
-          />
-          <KpiCard
-            label="Critical Escalations"
-            value={criticalCount}
-            icon="warning"
-            hintIcon="priority_high"
-            hint="Requires immediate review"
-            tone="critical"
-          />
-        </div>
+        <MissionTelemetry unitCount={unitCount} criticalCount={criticalCount} highRiskZones={highRiskZones} />
 
-        {/* Map + queue */}
-        <div className="grid min-h-[460px] flex-1 grid-cols-1 gap-6 lg:grid-cols-12">
-          <Card className="flex flex-col overflow-hidden p-0 lg:col-span-8">
-            <CardHeader>
-              <CardTitle>Live Operations Map</CardTitle>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded border px-2 py-1 text-label-sm uppercase',
-                  wsLive
-                    ? 'border-error/30 bg-surface text-error'
-                    : 'border-outline-variant/40 bg-surface text-on-surface-variant',
-                )}
-              >
-                <span className={cn('h-2 w-2 rounded-full', wsLive ? 'animate-pulse bg-error' : 'bg-outline')} />
-                {wsLive ? 'Live' : status.wsState === 'connecting' ? 'Connecting' : 'Reconnecting'}
-              </span>
-            </CardHeader>
-            <div className="relative flex-1">
-              <LiveMap mapState={mapState} className="absolute inset-0" />
+        <AgentTrace stages={traceStages} />
+
+        {lastAuthorization && <AuthorizationReceipt result={lastAuthorization} />}
+
+        <DecisionBrief
+          escalation={topCritical}
+          remainingEscalations={pending.filter((item) => item.id !== topCritical?.id)}
+          additionalCritical={Math.max(0, criticalCount - 1)}
+          highRiskZones={highRiskZones}
+          activeUnits={activeUnits}
+          unitCount={unitCount}
+          onReview={reviewDecision}
+        />
+
+        <TrustStrip status={systemStatus} />
+
+        <section className="pt-inversa-59" aria-labelledby="deployment-log-title">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-outline-variant pb-4">
+            <div>
+              <p className="font-mono text-label-sm uppercase text-on-surface-variant">Field operations / current roster</p>
+              <h2 id="deployment-log-title" className="mt-1 text-[clamp(30px,3.2vw,46px)] font-normal tracking-[-0.03em] text-on-surface">Deployment log</h2>
             </div>
-          </Card>
-
-          <Card className="flex flex-col overflow-hidden p-0 lg:col-span-4">
-            <CardHeader>
-              <CardTitle>Escalation Queue</CardTitle>
-              <Badge variant="critical">{criticalCount} Critical</Badge>
-            </CardHeader>
-            <div className="dm-scroll flex flex-1 flex-col gap-2 overflow-y-auto p-3">
-              {pending.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-center text-on-surface-variant">
-                  <Icon name="task_alt" className="text-[32px] text-success" />
-                  <p className="text-body-sm">Queue clear — no pending escalations</p>
-                </div>
-              ) : (
-                pending.map((item) => (
-                  <QueueItem
-                    key={item.id}
-                    item={item}
-                    now={now}
-                    onDispatch={approve}
-                    onAcknowledge={(id) => overrideItem(id, 'Acknowledged — manual handling')}
-                  />
-                ))
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* Deployments */}
-        <Card className="shrink-0 overflow-hidden p-0">
-          <CardHeader>
-            <CardTitle>Active Deployments Overview</CardTitle>
-            <span className="font-mono text-data-mono tabular-nums text-on-surface-variant">
+            <span className="font-mono text-label-sm uppercase tabular-nums text-on-surface-variant">
               {escalations.length} events · {unitCount} units
             </span>
-          </CardHeader>
+          </div>
           <DeploymentsTable teams={mapState.teams} />
-        </Card>
+        </section>
       </div>
+
+      <DecisionEvidenceDrawer
+        item={reviewingItem}
+        onClose={closeDecisionReview}
+        onApprove={approveReviewedDecision}
+        onReject={rejectReviewedDecision}
+      />
     </div>
   )
 }

@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { disasterApi } from '../lib/disasterApi';
 import type { WSConnectionState } from '../lib/disasterApi';
+import type { AgentRuntimeState, BackendState } from '../lib/systemStatus';
 
 export interface ApiStatus {
   backendOnline: boolean;
+  backendState: BackendState;
+  agentsState: AgentRuntimeState;
   wsState: WSConnectionState;
   lastChecked: Date | null;
   lastMessageAt: Date | null;
@@ -13,6 +16,8 @@ export interface ApiStatus {
 export function useApiStatus() {
   const [status, setStatus] = useState<ApiStatus>({
     backendOnline: false,
+    backendState: 'unknown',
+    agentsState: 'unknown',
     wsState: 'connecting',
     lastChecked: null,
     lastMessageAt: null,
@@ -24,6 +29,8 @@ export function useApiStatus() {
     setStatus(prev => ({
       ...prev,
       backendOnline: health !== null && health.status !== 'down',
+      backendState: health === null || health.status === 'down' ? 'offline' : 'live',
+      agentsState: health?.agents_active && health.agents_active > 0 ? 'online' : 'unknown',
       lastChecked: new Date(),
       agentsActive: health?.agents_active ?? 0,
     }));

@@ -170,13 +170,30 @@ class DashboardService:
         """Human approves an escalation -> commander dispatches (PRD Step 7)."""
         emitted = self.commander.approve(report_id, approver=approver)
         ok = bool(emitted)
+        dispatched = [_msg_to_dict(m) for m in emitted]
+        audit_record = getattr(emitted[0], "audit_record", None) if emitted else None
         return {
             "report_id": report_id,
             "action": "approve",
             "approver": approver,
             "ok": ok,
-            "dispatched": [_msg_to_dict(m) for m in emitted],
+            "dispatched": dispatched,
+            "audit_record": audit_record,
         }
+
+    def verify_audit(self) -> dict[str, Any]:
+        """Verify the Commander's existing audit logger without mutating it."""
+        logger = getattr(self.commander, "logger", None)
+        verifier = getattr(logger, "verify_chain_details", None)
+        if not callable(verifier):
+            return {
+                "valid": False,
+                "entries_checked": 0,
+                "head_hash": None,
+                "failure_index": None,
+                "available": False,
+            }
+        return {**verifier(), "available": True}
 
     def reject(
         self, report_id: str, approver: str = "human", note: str = ""

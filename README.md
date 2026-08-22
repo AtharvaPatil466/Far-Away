@@ -291,3 +291,4 @@ tests/         unit + e2e + scenario + perf + integration (integration gated by 
 > push is the offline, stdlib-first core. Read these layers as *production-shaped
 > scaffolding with a documented turn-on path* ([`DEPLOY.md`](DEPLOY.md)), not as a
 > system already validated at runtime scale.
+# baby-boi

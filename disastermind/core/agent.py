@@ -64,12 +64,13 @@ class BaseAgent(abc.ABC):
         except Exception:
             log.exception("agent %s failed handling message %s", self.name, message.id)
 
-    def emit(self, message: Message) -> None:
+    def emit(self, message: Message) -> dict:
         """Audit-log then publish. The single egress point for every agent."""
         if message.sender == "":
             message.sender = self.name
-        self.logger.record(message)
+        audit_record = self.logger.record(message)
         self.bus.publish(message)
+        return audit_record
 
     def run_tick(self) -> None:
         for out in self.tick() or []:
