@@ -72,6 +72,16 @@
   margin: 0 0 14px;
 }
 
+.real-ledger { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin: 18px 0 28px; padding: 22px 0; border-top: 1px solid #404040; border-bottom: 1px solid #404040; }
+.real-ledger > div { display: grid; gap: 7px; }
+.real-ledger span, .real-ledger code { font: 600 10px/1.4 var(--font-mono, ui-monospace, monospace); letter-spacing: .08em; color: var(--text-secondary, #84837b); }
+.real-ledger h3 { margin: 0; font: 500 clamp(28px, 4vw, 48px)/1 var(--font-heading, Inter, system-ui); color: var(--text-primary, #f4f3e8); }
+.real-ledger p { max-width: 680px; margin: 0; color: var(--text-secondary, #84837b); font-size: 12px; }
+.real-ledger-verified h3 { color: var(--success, #7fd99a); }
+.real-ledger-broken h3 { color: var(--error, #ff6f58); }
+.real-ledger-verifying h3, .real-ledger-unavailable h3 { color: var(--warning, #ffc948); }
+@media (max-width: 720px) { .real-ledger { align-items: flex-start; flex-direction: column; } }
+
 /* ── live shadow evidence ledger ────────────────────────────── */
 .live-evidence-pane { max-width: 1600px; margin: 0 auto; }
 .live-evidence-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 13px; }

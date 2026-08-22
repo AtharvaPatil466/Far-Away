@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle2, RefreshCcw, ScanSearch, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { verifyAuditLedger, type AuditVerificationResult } from '@/services/backendService'
+import { stateFromVerification, type RealLedgerState } from '../auditVerification'
 
 interface AuditEventPayload {
   number: number
@@ -74,6 +76,8 @@ export function AuditIntegrity() {
   const [events, setEvents] = useState<AuditEvent[]>([])
   const [verification, setVerification] = useState<VerificationState>('loading')
   const [invalidEvent, setInvalidEvent] = useState<number | null>(null)
+  const [realLedger, setRealLedger] = useState<RealLedgerState>('not-verified')
+  const [realResult, setRealResult] = useState<AuditVerificationResult | null>(null)
 
   const resetDemo = async () => {
     setVerification('loading')
@@ -103,6 +107,13 @@ export function AuditIntegrity() {
     setVerification('unverified')
   }
 
+  const verifyRealLedger = async () => {
+    setRealLedger('verifying')
+    const result = await verifyAuditLedger()
+    setRealResult(result)
+    setRealLedger(stateFromVerification(result))
+  }
+
   const verificationMessage = verification === 'intact'
     ? 'CHAIN INTACT — local demo records re-hashed successfully.'
     : verification === 'tampered'
@@ -120,7 +131,27 @@ export function AuditIntegrity() {
         </p>
       </div>
 
-      <p className="sample-banner">Demo audit chain — frontend simulation</p>
+      <section className={`real-ledger real-ledger-${realLedger}`} aria-labelledby="real-ledger-title">
+        <div>
+          <span>REAL LEDGER / READ ONLY</span>
+          <h3 id="real-ledger-title">
+            {realLedger === 'verified' ? 'CHAIN VERIFIED'
+              : realLedger === 'broken' ? `CHAIN BROKEN${realResult?.failure_index ? ` / EVENT #${realResult.failure_index}` : ''}`
+                : realLedger === 'verifying' ? 'VERIFYING'
+                  : realLedger === 'unavailable' ? 'STATUS UNAVAILABLE'
+                    : 'NOT VERIFIED'}
+          </h3>
+          <p>Verification recomputes the journal hash chain. It does not verify an external timestamp anchor.</p>
+          {realResult && (
+            <code>{realResult.entries_checked} entries checked · head {realResult.head_hash ? hashPrefix(realResult.head_hash) : 'unavailable'}</code>
+          )}
+        </div>
+        <button type="button" className="audit-action audit-verify" onClick={() => void verifyRealLedger()} disabled={realLedger === 'verifying'}>
+          <ScanSearch size={15} /> {realLedger === 'verifying' ? 'Verifying…' : 'Verify Ledger'}
+        </button>
+      </section>
+
+      <p className="sample-banner">TAMPER DEMO / CONTROLLED BROWSER DATA — production journal is never modified</p>
 
       <div className={`audit-verification audit-${verification}`} role="status" aria-live="polite">
         {verification === 'intact' ? <ShieldCheck size={19} /> : verification === 'tampered' ? <ShieldAlert size={19} /> : <ScanSearch size={19} />}
@@ -165,7 +196,7 @@ export function AuditIntegrity() {
       <p className="honesty-note">
         <strong>How the demo works:</strong> each local event is canonicalized and hashed with the preceding hash.
         Simulate Tamper changes only an already-hashed browser record, so the next verification identifies the first broken link.
-        Global audit status remains unknown until a real backend verification result is available.
+        This controlled demonstration is isolated from the read-only real ledger verification above.
       </p>
     </div>
   )
