@@ -32,7 +32,10 @@ def _seeded_journal(tmp_path) -> ShadowJournal:
 def test_chain_verifies_and_scorecard_joins_predictions_to_outcomes(tmp_path):
     j = _seeded_journal(tmp_path)
     assert j.verify_chain()
-    card = score_season(j)
+    # This fixture is a 6-row synthetic season: it exercises the join and the
+    # metric wiring, not season sufficiency. The production floor
+    # (``MIN_SETTLED_N``) is asserted in ``test_shadow_settled_n.py``.
+    card = score_season(j, min_settled_n=1)
     assert card["n_predictions"] == 6
     assert card["n_resolved"] == 5
     assert card["unresolved_ids"] == ["evt-5"]  # visible, not dropped

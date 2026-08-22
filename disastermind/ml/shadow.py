@@ -30,14 +30,27 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .eval.decision import confusion_at
 from .eval.metrics import brier_score, calibration_bins, expected_calibration_error, roc_auc
 
 _GENESIS = "shadow-genesis"
+
+#: The shadow worker runs daily (``.github/workflows/shadow-season.yml``, 06:17
+#: UTC). Every freshness threshold is derived from that cadence HERE, so
+#: changing the cron cannot leave the console asserting staleness against a
+#: schedule nobody updated.
+POLL_CADENCE_HOURS = 24
+#: One missed poll is a flaky runner; two is a broken pipeline.
+STALE_AFTER_HOURS = POLL_CADENCE_HOURS * 2
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
 
 def _chain_hash(prev_hash: str, payload: dict[str, Any]) -> str:
@@ -64,12 +77,20 @@ class ShadowJournal:
     silently dropping them.
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, *, clock: Callable[[], str] | None = None) -> None:
         self.path = path
+        #: Injectable so tests are deterministic; production uses wall-clock UTC.
+        self._clock = clock or _utc_now_iso
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
 
     # ------------------------------------------------------------------ writing
     def _last_hash(self) -> str:
+        """The tip to append after, recovered past any incomplete final write.
+
+        Returning _GENESIS here when the tail is torn would silently start a NEW
+        chain, severing every future record from the history before the crash --
+        which is precisely the linkage the chain exists to guarantee.
+        """
         last = _GENESIS
         for rec in self._iter_raw():
             last = rec.get("hash", last)
@@ -113,7 +134,21 @@ class ShadowJournal:
         }
         return self._append("outcome", payload)
 
+    def record_heartbeat(self, *, polled_at: str | None = None, detail: str = "") -> ShadowRecord:
+        """Journal that the worker RAN, whether or not it found anything.
+
+        Without this, a healthy quiet stretch -- worker polling, no qualifying
+        events -- is byte-for-byte indistinguishable from a dead pipeline: both
+        leave the journal unchanged. The heartbeat is what separates them, and
+        it rides in the chain so it cannot be fabricated after the fact.
+        """
+        return self._append("heartbeat", {"polled_at": polled_at or self._clock(), "detail": detail})
+
     def _append(self, kind: str, payload: dict[str, Any]) -> ShadowRecord:
+        # Stamped HERE and only here, so it lands on new entries and is never
+        # backfilled onto existing ones. It is inside the payload, hence inside
+        # the hash, hence not forgeable after the fact.
+        payload = {**payload, "committed_at": self._clock()}
         h = _chain_hash(self._last_hash(), payload)
         rec = {"kind": kind, "payload": payload, "hash": h}
         with open(self.path, "a", encoding="utf-8") as fh:
@@ -122,21 +157,96 @@ class ShadowJournal:
 
     # ------------------------------------------------------------------ reading
     def _iter_raw(self) -> Iterable[dict[str, Any]]:
+        """Yield parsed records; stop at the first unreadable line.
+
+        A hard kill mid-append leaves a TORN final line. Letting json.loads
+        raise here meant every reader -- including verify_chain -- crashed with
+        a JSONDecodeError instead of returning a verdict, so a power cut looked
+        exactly like a bug. Damage is surfaced through :meth:`torn_lines`, not
+        through an exception escaping a read.
+        """
         if not os.path.exists(self.path):
             return
         with open(self.path, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
-                if line:
+                if not line:
+                    continue
+                try:
                     yield json.loads(line)
+                except json.JSONDecodeError:
+                    return
+
+    def torn_lines(self) -> int:
+        """Count trailing lines that could not be parsed (incomplete writes)."""
+        if not os.path.exists(self.path):
+            return 0
+        torn = 0
+        with open(self.path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                if torn:
+                    torn += 1
+                    continue
+                try:
+                    json.loads(line)
+                except json.JSONDecodeError:
+                    torn = 1
+        return torn
 
     def verify_chain(self) -> bool:
-        """True iff every line's hash matches the recomputed chain (no edits)."""
+        """True iff every line's hash matches the recomputed chain (no edits).
+
+        A torn tail returns False rather than raising: the file as it stands
+        cannot be attested to. Repair it deliberately with :meth:`truncate_torn_tail`
+        -- never silently, since "the last write did not finish" and "someone
+        edited this" must not look the same to an operator.
+        """
         prev = _GENESIS
         for rec in self._iter_raw():
             if rec.get("hash") != _chain_hash(prev, rec.get("payload", {})):
                 return False
             prev = rec["hash"]
+        return self.torn_lines() == 0
+
+    def truncate_torn_tail(self) -> int:
+        """Drop trailing unparseable lines. Returns how many were removed.
+
+        An incomplete write is not a record -- nothing is lost by discarding it,
+        and the chain up to that point stays intact and verifiable.
+        """
+        torn = self.torn_lines()
+        if not torn:
+            return 0
+        keep = [json.dumps(rec, sort_keys=True, separators=(",", ":"))
+                for rec in self._iter_raw()]
+        with open(self.path, "w", encoding="utf-8") as fh:
+            for line in keep:
+                fh.write(line + "\n")
+        return torn
+
+    def chain_head(self) -> str:
+        """The current tip hash -- what an external anchor attests to."""
+        return self._last_hash()
+
+    def verify_monotonic(self) -> bool:
+        """True iff ``committed_at`` never goes backwards.
+
+        Deliberately separate from :meth:`verify_chain`: a re-hashed forgery and
+        a clock that jumped are different failures with different remedies, and
+        collapsing them into one red light tells an operator nothing about which
+        one happened. Entries predating the field are skipped, not failed.
+        """
+        prev = ""
+        for rec in self._iter_raw():
+            stamp = rec.get("payload", {}).get("committed_at")
+            if stamp is None:
+                continue
+            if prev and stamp < prev:
+                return False
+            prev = stamp
         return True
 
     def records(self) -> list[ShadowRecord]:
@@ -147,7 +257,17 @@ class ShadowJournal:
 
 
 # ------------------------------------------------------------------------- scoring
-def score_season(journal: ShadowJournal) -> dict[str, Any]:
+#: A season needs BOTH a floor of settled outcomes AND at least one positive
+#: before any skill metric means anything. Below either bar the undefined values
+#: are indistinguishable from measured catastrophe -- ``roc_auc`` returns a 0.5
+#: sentinel with no positives, and ``confusion_at`` yields POD 0.0 / FAR 1.0 --
+#: so the scorecard reports WHY it cannot score instead of emitting them.
+MIN_SETTLED_N = 30
+
+
+def score_season(
+    journal: ShadowJournal, *, min_settled_n: int = MIN_SETTLED_N
+) -> dict[str, Any]:
     """Join predictions to outcomes and emit the shadow-season scorecard.
 
     Every prediction appears in exactly one bucket: resolved (scored) or
@@ -174,26 +294,100 @@ def score_season(journal: ShadowJournal) -> dict[str, Any]:
         "unresolved_ids": sorted(unresolved),
         "chain_verified": True,
     }
-    if resolved:
-        y = [1 if o["occurred"] else 0 for _, o in resolved]
-        p = [pr["probability"] for pr, _ in resolved]
-        # The operating threshold was declared per prediction, live; the season
-        # is scored at the median declared threshold (and it is reported).
-        thresholds = sorted(pr["threshold"] for pr, _ in resolved)
-        threshold = thresholds[len(thresholds) // 2]
-        bins = calibration_bins(y, p, n_bins=10)
+    if not resolved:
+        scorecard.update({"scoreable": False, "reason": "no settled outcomes yet"})
+        return scorecard
+
+    y = [1 if o["occurred"] else 0 for _, o in resolved]
+    p = [pr["probability"] for pr, _ in resolved]
+    n_positive = sum(y)
+    if len(resolved) < min_settled_n or n_positive == 0:
         scorecard.update(
             {
-                "threshold": threshold,
-                "confusion": confusion_at(y, p, threshold).to_dict(),
-                "auc": roc_auc(y, p),
-                "brier": brier_score(y, p),
-                "ece": expected_calibration_error(bins),
-                "reliability": [b.to_dict() for b in bins if b.count],
-                "base_rate": sum(y) / len(y),
+                "scoreable": False,
+                "reason": (
+                    f"scoring requires a season: {len(resolved)} settled "
+                    f"(need {min_settled_n}), {n_positive} positive (need 1)"
+                ),
+                "n_positive": n_positive,
+                "min_settled_n": min_settled_n,
             }
         )
+        return scorecard
+
+    # The operating threshold was declared per prediction, live; the season
+    # is scored at the median declared threshold (and it is reported).
+    thresholds = sorted(pr["threshold"] for pr, _ in resolved)
+    threshold = thresholds[len(thresholds) // 2]
+    bins = calibration_bins(y, p, n_bins=10)
+    scorecard.update(
+        {
+            "threshold": threshold,
+            "confusion": confusion_at(y, p, threshold).to_dict(),
+            "auc": roc_auc(y, p),
+            "brier": brier_score(y, p),
+            "ece": expected_calibration_error(bins),
+            "reliability": [b.to_dict() for b in bins if b.count],
+            "base_rate": sum(y) / len(y),
+            "n_positive": n_positive,
+            "scoreable": True,
+        }
+    )
     return scorecard
+
+
+def freshness(journal: ShadowJournal, *, now: str | None = None) -> dict[str, Any]:
+    """Liveness of the season, from two INDEPENDENTLY tracked facts.
+
+    ``last_poll_at`` (the worker ran) and ``last_commit_at`` (an entry was
+    written) are different things. Conflating them is the classic dashboard lie:
+    a healthy quiet stretch -- worker polling on schedule, no qualifying
+    earthquakes -- produces exactly the same unchanged journal as a pipeline
+    that died last week. One deserves a green light and the other a red one.
+
+    Hence three states, never two:
+
+    * ``stalled``   -- no poll within :data:`STALE_AFTER_HOURS`. The pipeline is
+      broken. This is the only state that should show red.
+    * ``ingesting`` -- polled recently AND committed recently. Events arriving.
+    * ``quiet``     -- polled recently, nothing committed. Working as intended;
+      the world simply did not produce a qualifying event. NOT an error.
+    """
+    now = now or _utc_now_iso()
+    last_poll = last_commit = None
+    for rec in journal._iter_raw():
+        payload = rec.get("payload", {})
+        stamp = payload.get("committed_at")
+        if rec.get("kind") == "heartbeat":
+            # A heartbeat proves the POLL, never the ingestion. Counting its own
+            # commit stamp as a commit would make every quiet season report
+            # "ingesting" -- the exact conflation this function exists to avoid.
+            last_poll = max(last_poll or "", payload.get("polled_at", "") or stamp or "")
+            continue
+        if stamp:
+            last_commit = max(last_commit or "", stamp)
+            # A substantive commit also proves the worker ran, so older journals
+            # written before heartbeats existed do not read as stalled.
+            last_poll = max(last_poll or "", stamp)
+
+    stale_before = (
+        datetime.fromisoformat(now) - timedelta(hours=STALE_AFTER_HOURS)
+    ).isoformat()
+
+    if last_poll is None or last_poll < stale_before:
+        state = "stalled"
+    elif last_commit is not None and last_commit >= stale_before:
+        state = "ingesting"
+    else:
+        state = "quiet"
+
+    return {
+        "state": state,
+        "last_poll_at": last_poll,
+        "last_commit_at": last_commit,
+        "stale_after_hours": STALE_AFTER_HOURS,
+        "poll_cadence_hours": POLL_CADENCE_HOURS,
+    }
 
 
 def export_for_review(journal: ShadowJournal) -> dict[str, Any]:

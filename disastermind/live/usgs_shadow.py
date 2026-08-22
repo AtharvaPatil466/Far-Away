@@ -34,7 +34,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Sequence
 
-from ..ml.shadow import ShadowJournal
+from ..ml.shadow import ShadowJournal, freshness
 from ..ml.validation.dataset import Quake, load_quakes, temporal_split
 from ..ml.validation.run import fit_logistic, predict
 
@@ -225,12 +225,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         now_ms = args.now_ms if args.now_ms is not None else _now_ms()
         resolved_n = resolve(journal, now_ms=now_ms)
 
+    # Journal the fact that the worker RAN, every run, even when the feed had
+    # nothing qualifying. Without it a quiet week and a dead cron leave an
+    # identical (unchanged) journal, and the console cannot tell them apart.
+    journal.record_heartbeat(detail=f"mode={args.mode} added={added} resolved={resolved_n}")
+
     ok = journal.verify_chain()
+    monotonic = journal.verify_monotonic()
     print(json.dumps({
         "predictions_added": added, "outcomes_resolved": resolved_n,
-        "chain_intact": ok, "journal": args.journal,
+        "chain_intact": ok, "committed_at_monotonic": monotonic,
+        "freshness": freshness(journal)["state"], "journal": args.journal,
     }))
-    return 0 if ok else 1
+    return 0 if (ok and monotonic) else 1
 
 
 def _now_ms() -> int:

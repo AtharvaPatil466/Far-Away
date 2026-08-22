@@ -9,6 +9,7 @@ import { SplashScreen } from './shell/SplashScreen'
 import { CommandShell } from './shell/CommandShell'
 import type { UnifiedModuleKey } from './shell/TopNav'
 import { OfflineBanner } from './components/OfflineBanner'
+import { Provenance } from './modules/provenance/Provenance'
 
 const MODULE_KEYS: UnifiedModuleKey[] = ['dashboard', 'escalation', 'report', 'evidence', 'field']
 
@@ -56,6 +57,7 @@ function App() {
         {activeModule === 'dashboard' && <Dashboard />}
         {activeModule === 'escalation' && <Escalation />}
         {activeModule === 'report' && <Report />}
+        {activeModule === 'provenance' && <Provenance />}
         {activeModule === 'evidence' && <Evidence />}
         {activeModule === 'field' && <Field />}
       </CommandShell>

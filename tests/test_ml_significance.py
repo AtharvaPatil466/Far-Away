@@ -66,3 +66,46 @@ def test_bootstrap_ci_brackets_the_observed_value():
     obs, lo, hi = bootstrap_ci(y, good, metric=roc_auc, n_boot=200, seed=0)
     assert lo <= obs <= hi
     assert 0.5 < obs <= 1.0
+
+
+# --------------------------------------------------------------- p-value floor
+def test_p_at_floor_flags_the_resolution_limit():
+    """``p`` bottoms out at 1/(B+1); the flag says so rather than implying a measurement.
+
+    Every published `p = 0.0040` in the validation report was this floor at
+    B=250 (1/251 = 0.003984) -- zero resamples favouring the baseline -- not a
+    measured value. Reporting it as an equality overstated the precision.
+    """
+    y = [0, 1] * 40
+    separable = [0.1 if v == 0 else 0.9 for v in y]
+    flat = [0.5] * len(y)
+
+    cmp = compare_auc(y, separable, flat, n_boot=250, seed=0)
+
+    assert cmp.p_at_floor is True
+    assert cmp.p_value == pytest.approx(1 / 251, rel=1e-9)
+    assert cmp.to_dict()["p_at_floor"] is True
+
+
+def test_p_not_at_floor_when_any_resample_favours_baseline():
+    y = [0, 1] * 40
+    flat = [0.5] * len(y)
+    separable = [0.1 if v == 0 else 0.9 for v in y]
+
+    cmp = compare_auc(y, flat, separable, n_boot=250, seed=0)
+
+    assert cmp.p_at_floor is False
+    assert cmp.p_value > 1 / 251
+
+
+def test_floor_moves_with_n_boot():
+    """Raising B lowers the bound — the fix available if a tighter p is needed."""
+    y = [0, 1] * 40
+    separable = [0.1 if v == 0 else 0.9 for v in y]
+    flat = [0.5] * len(y)
+
+    tighter = compare_auc(y, separable, flat, n_boot=2000, seed=0)
+
+    assert tighter.p_at_floor is True
+    assert tighter.p_value == pytest.approx(1 / 2001, rel=1e-9)
+    assert tighter.p_value < 1 / 251

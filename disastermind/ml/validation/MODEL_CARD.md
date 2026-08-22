@@ -56,7 +56,7 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 - _Note: PAGER is excluded as a baseline on this label because the label partially derives from PAGER; see felt_vs_pager for that comparison._
 
 ### Incumbent check: felt label vs USGS PAGER
-- Model AUC 0.7299 vs PAGER 0.5094 (delta +0.2206, p=0.0040)
+- Model AUC 0.7299 vs PAGER 0.5094 (delta +0.2206, p < 0.0040)
 
 ## Flood
 
@@ -70,8 +70,8 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 ### vs operational baselines (paired bootstrap on AUC)
 | Baseline | Baseline AUC | Model AUC | dAUC [95% CI] | p | significant |
 |---|---|---|---|---|---|
-| persistence | 0.9338 | 0.9451 | +0.0115 [+0.0088, +0.0146] | 0.0040 | YES |
-| seasonal_climatology | 0.8551 | 0.9451 | +0.0898 [+0.0802, +0.0977] | 0.0040 | YES |
+| persistence | 0.9338 | 0.9451 | +0.0115 [+0.0088, +0.0146] | < 0.0040 | YES |
+| seasonal_climatology | 0.8551 | 0.9451 | +0.0898 [+0.0802, +0.0977] | < 0.0040 | YES |
 
 ### At the operating point (threshold chosen on calibration split)
 - Target POD 90% -> threshold 0.063
@@ -140,7 +140,7 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 ### vs operational baselines (paired bootstrap on AUC)
 | Baseline | Baseline AUC | Model AUC | dAUC [95% CI] | p | significant |
 |---|---|---|---|---|---|
-| angstrom_index | 0.8220 | 0.8383 | +0.0162 [+0.0124, +0.0194] | 0.0040 | YES |
+| angstrom_index | 0.8220 | 0.8383 | +0.0162 [+0.0124, +0.0194] | < 0.0040 | YES |
 
 ### At the operating point (threshold chosen on calibration split)
 - Target POD 90% -> threshold 0.117
@@ -197,7 +197,7 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 ### vs operational baselines (paired bootstrap on AUC)
 | Baseline | Baseline AUC | Model AUC | dAUC [95% CI] | p | significant |
 |---|---|---|---|---|---|
-| angstrom_index | 0.7965 | 0.8549 | +0.0585 [+0.0520, +0.0646] | 0.0040 | YES |
+| angstrom_index | 0.7965 | 0.8549 | +0.0585 [+0.0520, +0.0646] | < 0.0040 | YES |
 
 ### At the operating point (threshold chosen on calibration split)
 - Target POD 90% -> threshold 0.278
@@ -245,3 +245,9 @@ _real data only; leak-free features; temporal + blocked-spatial validation; thre
 - _Note: Real Indian geography + Feb-May fire season (replaces the Pacific-NW FPA-FOD validation — FIRMS was unreachable when that was first built)._
 - _Note: Label is a FIRMS satellite active-fire detection; severity is FRP (fire radiative power), the satellite intensity proxy, not acres._
 - _Note: The Angström index baseline is the operational fire-weather formula._
+
+> **On the p-values.** The paired bootstrap draws B = 250 resamples and reports
+> `p = (worse + 1) / (B + 1)`, so its smallest attainable value is 1/251 = 0.003984.
+> Every `< 0.004` above sits exactly on that floor: not one resample favoured the
+> baseline. It is a bound set by the resample count, not a measured quantity, and is
+> written as an inequality for that reason. Raising B lowers the bound.

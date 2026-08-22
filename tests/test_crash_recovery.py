@@ -1,0 +1,143 @@
+"""Crash recovery for the append-only journals (on-site item 9).
+
+A `kill -9` mid-append leaves a TORN final line: a partial JSON record. The
+question item 9 asks is whether the durable record survives that, and whether a
+restarted process picks up where it left off.
+
+There is no replay engine in this codebase -- state is not rebuilt from the
+journal -- so what is actually load-bearing is the journal's own integrity
+across a hard kill. That is what these tests cover, and the file says so rather
+than implying a recovery capability that does not exist.
+
+Two failures were found here and are now pinned:
+
+  1. verify_chain() RAISED JSONDecodeError on a torn tail instead of returning a
+     verdict, so a power cut was indistinguishable from a crash bug and took the
+     integrity check down with it.
+  2. the tip lookup fell back to GENESIS on a torn tail, silently starting a NEW
+     chain -- severing every subsequent record from the history before the
+     crash, which is exactly the linkage the chain exists to prove.
+"""
+from __future__ import annotations
+
+import os
+import signal
+import subprocess
+import sys
+import textwrap
+import time
+
+from disastermind.ml.shadow import ShadowJournal
+
+
+def _torn(path, drop=25):
+    """Truncate the file mid-record, as an interrupted write would leave it."""
+    raw = open(path, encoding="utf-8").read()
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(raw[: len(raw) - drop])
+
+
+def _seeded(tmp_path, n=3):
+    path = str(tmp_path / "season.jsonl")
+    journal = ShadowJournal(path)
+    for _ in range(n):
+        journal.record_heartbeat()
+    return path
+
+
+# ------------------------------------------------------------- torn tail
+def test_verify_reports_a_verdict_instead_of_raising(tmp_path):
+    path = _seeded(tmp_path)
+    _torn(path)
+
+    assert ShadowJournal(path).verify_chain() is False
+
+
+def test_torn_tail_is_counted_not_hidden(tmp_path):
+    path = _seeded(tmp_path)
+    _torn(path)
+
+    assert ShadowJournal(path).torn_lines() == 1
+
+
+def test_appending_after_a_crash_does_not_start_a_new_chain(tmp_path):
+    """The severe one.
+
+    If the tip reset to GENESIS, records written after a crash would not link to
+    anything before it, and the break would be invisible: the file would verify
+    clean while attesting to nothing.
+    """
+    path = _seeded(tmp_path)
+    surviving = [r.hash for r in ShadowJournal(path).records()][:-1]
+    _torn(path)  # destroys the final record
+
+    recovered = ShadowJournal(path).chain_head()
+
+    assert recovered != "shadow-genesis", "a crash silently restarted the chain"
+    assert recovered == surviving[-1], "tip must be the last SURVIVING record"
+
+
+def test_deliberate_repair_restores_verifiability(tmp_path):
+    """Repair is explicit, never automatic.
+
+    "The last write did not finish" and "someone edited this" must not look the
+    same to an operator, so the torn line is only dropped when asked.
+    """
+    path = _seeded(tmp_path)
+    _torn(path)
+    journal = ShadowJournal(path)
+
+    removed = journal.truncate_torn_tail()
+
+    assert removed == 1
+    assert journal.verify_chain() is True
+    assert journal.torn_lines() == 0
+
+
+def test_writing_continues_correctly_after_repair(tmp_path):
+    path = _seeded(tmp_path)
+    _torn(path)
+    journal = ShadowJournal(path)
+    journal.truncate_torn_tail()
+
+    journal.record_heartbeat()
+
+    assert journal.verify_chain() is True
+
+
+# ------------------------------------------------------- real SIGKILL
+def test_real_sigkill_leaves_a_readable_journal(tmp_path):
+    """End-to-end: kill -9 a live writer, then read the journal back.
+
+    The deterministic tests above simulate the torn write; this one produces a
+    genuine one, so the recovery path is proven against the operating system
+    rather than against our model of it.
+    """
+    path = tmp_path / "killed.jsonl"
+    script = textwrap.dedent(f"""
+        import sys, time
+        sys.path.insert(0, {os.getcwd()!r})
+        from disastermind.ml.shadow import ShadowJournal
+        j = ShadowJournal({str(path)!r})
+        while True:
+            j.record_heartbeat(detail="x" * 200)
+            time.sleep(0.001)
+    """)
+    proc = subprocess.Popen([sys.executable, "-c", script])
+    time.sleep(2.0)
+    os.kill(proc.pid, signal.SIGKILL)
+    proc.wait(timeout=10)
+
+    assert path.exists(), "writer produced no journal"
+    journal = ShadowJournal(str(path))
+
+    # Whatever the kill landed on, reading must produce a verdict, not a crash.
+    verdict = journal.verify_chain()
+    assert isinstance(verdict, bool)
+
+    journal.truncate_torn_tail()
+    assert journal.verify_chain() is True, "journal unrecoverable after SIGKILL"
+    assert len(journal.records()) > 0, "no surviving records"
+
+    journal.record_heartbeat()
+    assert journal.verify_chain() is True, "could not resume writing after SIGKILL"
