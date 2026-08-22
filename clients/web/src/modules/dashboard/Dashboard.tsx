@@ -16,12 +16,13 @@ import { DeploymentsTable } from './components/DeploymentsTable'
 import { AgentTrace, type AgentTraceStage } from './components/AgentTrace'
 import { DecisionEvidenceDrawer } from './components/DecisionEvidenceDrawer'
 import { GoldenDemoControls } from './components/GoldenDemoControls'
-import { IncidentHero } from './components/IncidentHero'
+import { IncidentHero, decisionHeadlineFor } from './components/IncidentHero'
 import { MissionTelemetry } from './components/MissionTelemetry'
 import { DecisionBrief } from './components/DecisionBrief'
 import { TrustStrip } from './components/TrustStrip'
 import { AuthorizationReceipt } from './components/AuthorizationReceipt'
-import { commanderStageForApproval } from './lib/approvalFlow'
+import { commanderStageForApproval, commanderReviewRequired } from './lib/approvalFlow'
+import type { TelemetryWindow } from './components/MissionTelemetry'
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -32,6 +33,33 @@ function useNow(intervalMs = 1000) {
     return () => window.clearInterval(t)
   }, [intervalMs])
   return now
+}
+
+/**
+ * Population figure parsed verbatim out of the pending recommendation's own
+ * text (memo / evidence). Returns null when no figure exists — never guessed.
+ */
+function residentsInScope(item: EscalationItem | null): string | null {
+  if (!item) return null
+  const candidates = [item.memo.recommended, item.decisionEvidence?.recommendedAction, item.memo.situation]
+  for (const text of candidates) {
+    const match = text?.match(/(\d[\d,]*)\s+(?:\w+\s+)?(?:residents|people|persons|displaced)/i)
+    if (match) return match[1]
+  }
+  return null
+}
+
+/** Real escalation auto-execute semantics (5-min timeout; human-only never times out). */
+function decisionWindowState(item: EscalationItem | null, now: number): TelemetryWindow | null {
+  if (!item) return null
+  if (item.timeoutMs === Infinity) return { value: 'Human only', tone: 'warning' }
+  const remaining = Math.max(0, item.createdAt + item.timeoutMs - now)
+  const mm = Math.floor(remaining / 60_000)
+  const ss = Math.floor((remaining % 60_000) / 1000)
+  return {
+    value: `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`,
+    tone: remaining <= 60_000 ? 'critical' : remaining <= 120_000 ? 'warning' : 'neutral',
+  }
 }
 
 const DEMO_AGENT_STAGES: readonly AgentTraceStage[] = [
@@ -129,19 +157,25 @@ export function Dashboard() {
   )
   const criticalCount = pending.filter((e) => e.priority === 'CRITICAL').length
   const topCritical = pending.find((item) => item.priority === 'CRITICAL') ?? null
-  const districtCount = useMemo(() => {
-    for (const item of pending) {
-      const match = item.memo.situation.match(/(\d+)\s+districts?\s+affected/i)
-      if (match) return Number(match[1])
-    }
-    return null
-  }, [pending])
-  const districtWords: Record<number, string> = { 1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six' }
-  const incidentHeadline = districtCount
-    ? `${districtWords[districtCount] ?? districtCount} districts escalating.`
-    : criticalCount > 0
-      ? `${criticalCount} critical ${criticalCount === 1 ? 'decision' : 'decisions'} pending.`
-      : 'Response operations active.'
+  // Decision-hero content — derived from the real escalation queue, never invented.
+  const decisionHeadline = topCritical
+    ? decisionHeadlineFor(topCritical.trigger)
+    : pending.length
+      ? `${pending.length} ${pending.length === 1 ? 'decision awaits' : 'decisions await'} commander review`
+      : 'No decisions pending'
+  const heroSupporting = topCritical
+    ? `${topCritical.zone} — ${topCritical.memo.recommended}`
+    : pending.length
+      ? `${pending.length} lower-priority ${pending.length === 1 ? 'recommendation is' : 'recommendations are'} queued for review below.`
+      : 'No agent recommendation currently crosses a human-authority threshold.'
+  const heroEyebrow = dataSource === 'live'
+    ? 'Cyclone Remal · Odisha coast · live backend feed'
+    : 'Cyclone Remal · Odisha coast · deterministic scenario'
+  const scopeResidents = residentsInScope(topCritical)
+  const decisionWindow = useMemo(
+    () => decisionWindowState(topCritical ?? pending[0] ?? null, now),
+    [topCritical, pending, now],
+  )
   const mapStatus = wsLive
     ? { label: 'Live map', tone: 'healthy' as const }
     : status.wsState === 'offline'
@@ -155,11 +189,14 @@ export function Dashboard() {
     feed: 'unknown',
   }
   const goldenDemoMeta = goldenDemo.step === 'idle' ? null : GOLDEN_DEMO_STEPS[goldenDemo.step]
+  const commanderStage = commanderStageForApproval(lastAuthorization)
   const traceStages = goldenDemo.step === 'idle'
     ? DEMO_AGENT_STAGES.map((stage) => stage.id === 'commander'
-      ? { ...stage, state: commanderStageForApproval(lastAuthorization) }
+      ? { ...stage, state: commanderStage }
       : stage)
     : goldenDemoAgentTrace(goldenDemo.step)
+  // COMMAND presentation reflects the real queue — never upstream completion.
+  const humanDecisionPending = commanderReviewRequired(commanderStage, pending.length)
   const clock = new Date(now).toLocaleTimeString('en-IN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -212,7 +249,9 @@ export function Dashboard() {
         <IncidentHero
           mapState={mapState}
           dataSource={dataSource}
-          headline={incidentHeadline}
+          eyebrow={heroEyebrow}
+          headline={decisionHeadline}
+          supporting={heroSupporting}
           criticalCount={criticalCount}
           mapStatus={mapStatus}
           clock={clock}
@@ -230,9 +269,18 @@ export function Dashboard() {
           )}
         />
 
-        <MissionTelemetry unitCount={unitCount} criticalCount={criticalCount} highRiskZones={highRiskZones} />
+        <MissionTelemetry
+          scopeResidents={scopeResidents}
+          pendingDecisions={pending.length}
+          criticalPending={criticalCount > 0}
+          highRiskZones={highRiskZones}
+          decisionWindow={decisionWindow}
+        />
 
-        <AgentTrace stages={traceStages} />
+        <AgentTrace
+          stages={traceStages}
+          {...(goldenDemo.step === 'idle' ? { humanDecisionPending } : {})}
+        />
 
         {lastAuthorization && <AuthorizationReceipt result={lastAuthorization} />}
 
