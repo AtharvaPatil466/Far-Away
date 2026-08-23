@@ -17,6 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'report', label: 'Incidents', icon: 'description' },
   { key: 'evidence', label: 'Evidence', icon: 'fact_check' },
   { key: 'field', label: 'Field Ops', icon: 'map' },
+  { key: 'provenance', label: 'Provenance', icon: 'history' },
 ]
 
 const formatClock = (date: Date) =>
