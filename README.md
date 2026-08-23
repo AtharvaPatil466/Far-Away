@@ -1,8 +1,9 @@
-# DisasterMind — Multi-Agent Disaster Coordination (Group A)
+# DisasterMind — Multi-Agent Disaster Coordination
 
 [![CI](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/ci.yml/badge.svg)](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/ci.yml)
 [![shadow season](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/shadow-season.yml/badge.svg)](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/shadow-season.yml)
 ![Tests](https://img.shields.io/badge/tests-1366%20py%20%2B%2044%20web-brightgreen)
+![Round 2](https://img.shields.io/badge/round%202-reconciliation-blueviolet)
 ![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)
 ![Typecheck](https://img.shields.io/badge/mypy-core%20gated-blue)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
@@ -22,6 +23,46 @@ India-focused (IMD / CWC / NCS / ISRO Bhuvan feeds) across three hazard modules:
 > critical-infrastructure requisition) are **human-only and never act without a
 > commander**. The system *recommends*; a human *acts* on the decisions that
 > matter. See [`disastermind/tier1/commander/matrix.py`](disastermind/tier1/commander/matrix.py).
+
+## Round 2 — Reconciliation: Change History
+
+> Extend the MVP with a capability related to conflicting, duplicate, or
+> partially matching information. Record meaningful changes over time and
+> make them easy to inspect.
+
+**Handles:** duplicate · conflict · partial match · out-of-order arrival · retraction (source-scoped) · three-way corroboration · deadlock
+
+Agencies disagree. USGS and India's NCS routinely publish different magnitudes for
+one earthquake — different networks, different scales, neither wrong. Every inbound
+report is stored as an immutable **Observation**; the canonical incident is
+*derived* from that set and never edited in place, so replaying the observations
+rebuilds it exactly. Selection uses `observed_at`, never `received_at`, which makes
+canonical state a pure function of the observation set — **arrival order cannot
+change the answer**.
+
+Policy, per field: **authority → recency → corroboration**. All three tie and the
+field is `UNRESOLVED` — no winner is invented, both candidates stay visible.
+Conflicts are never collapsed: losing values are retained and flagged.
+
+```bash
+make policy       # print the active tolerances, ranking and thresholds
+make provenance   # recompute both demo incidents (offline, deterministic)
+# 10 reports received - 1 duplicate = 9 observations -> 9 revisions -> 6 meaningful
+```
+
+A revision is **MEANINGFUL** if it crosses a dispatch threshold, changes the
+capstone recommendation, or exceeds the field tolerance — everything else is MINOR
+and is still recorded, chained and inspectable. Each revision carries the sentence
+that classified it, and that sentence is what the console shows.
+
+Inspect it in the **PROVENANCE** console view: timeline with meaningful rows
+dominant, a meaningful-only toggle that reports what it suppressed and why,
+per-field provenance, and a second scenario where the ranking picks the **wrong**
+source and the flagged alternative turns out to have been right all along.
+Revisions append to the existing hash chain, so `make verify-audit` covers change
+history.
+
+Full write-up: **[`RECONCILIATION.md`](RECONCILIATION.md)**.
 
 | Module | Hazard | Activates |
 |--------|--------|-----------|
@@ -178,41 +219,7 @@ pip install -e '.[storage]'   # psycopg, elasticsearch, minio
 pip install -e '.[all]'       # everything
 ```
 
-## Conflicting, duplicate and partially-matching reports
-
-Agencies disagree. USGS and India's NCS routinely publish different magnitudes for
-one earthquake — different networks, different scales, neither wrong. Every inbound
-report is stored as an immutable **Observation**; the canonical incident is
-*derived* from that set and never edited in place, so replaying the observations
-rebuilds it exactly. Selection uses `observed_at`, never `received_at`, which makes
-canonical state a pure function of the observation set — **arrival order cannot
-change the answer**.
-
-Policy, per field: **authority → recency → corroboration**. All three tie and the
-field is `UNRESOLVED` — no winner is invented, both candidates stay visible.
-Conflicts are never collapsed: losing values are retained and flagged.
-
-```bash
-make policy       # print the active tolerances, ranking and thresholds
-make provenance   # recompute both demo incidents (offline, deterministic)
-# 10 reports received - 1 duplicate = 9 observations -> 9 revisions -> 6 meaningful
-```
-
-A revision is **MEANINGFUL** if it crosses a dispatch threshold, changes the
-capstone recommendation, or exceeds the field tolerance — everything else is MINOR
-and is still recorded, chained and inspectable. Each revision carries the sentence
-that classified it, and that sentence is what the console shows.
-
-Inspect it in the **PROVENANCE** console view: timeline with meaningful rows
-dominant, a meaningful-only toggle that reports what it suppressed and why,
-per-field provenance, and a second scenario where the ranking picks the **wrong**
-source and the flagged alternative turns out to have been right all along.
-Revisions append to the existing hash chain, so `make verify-audit` covers change
-history.
-
-Full write-up: **[`RECONCILIATION.md`](RECONCILIATION.md)**.
-
-## Autonomy & escalation model (Step 7)
+## Autonomy & escalation model
 
 The Commander classifies every field order against an authority matrix:
 
@@ -225,21 +232,21 @@ The Commander classifies every field order against an authority matrix:
   declaring a state of emergency, armed forces in civil situations, critical
   national infrastructure.
 
-## Equity & priority (Steps 4–5)
+## Equity & priority
 
 Resource allocation weights elderly density, hospital proximity, road
 accessibility and informal-settlement density **equally** with urban centres
 (`VulnerabilityProfile.weight()`). Evacuation routing serves, in order:
 mobility-impaired → elderly → children → hospitalised → general.
 
-## Audit & explainability (Step 9)
+## Audit & explainability
 
 Every message is logged through a **tamper-evident SHA-256 hash chain**
 (`audit/decision_log.py`); `verify_chain()` detects any retroactive edit. Each ML
 prediction logs SHAP-style feature attributions. Durable JSONL locally; optional
 Elasticsearch / TimescaleDB / PostGIS / MinIO via `docker-compose.yml`.
 
-## Graceful degradation (Step 10)
+## Graceful degradation
 
 * Kafka down → `KafkaBus` fails over to backup brokers, then to in-memory.
 * A module that won't import is skipped at boot (`build_system` reports
@@ -257,9 +264,7 @@ python -m disastermind doctor                         # system self-check (DAG b
 python -m disastermind serve                          # run the dashboard API (uvicorn)
 python -m disastermind verify-audit audit.jsonl      # check the hash-chain
 python -m disastermind.demo B                         # narrated end-to-end demo
-```
 
-```bash
 make policy         # print the active reconciliation policy
 make provenance     # recompute the incident provenance views
 make verify-audit AUDIT=audit.jsonl   # verify a decision-log hash chain
@@ -271,9 +276,9 @@ make help           # every target, with descriptions
 
 ## Extended surface
 
-Built on top of the Group A core (all optional/heavy deps lazy with fallbacks):
+Built on top of the core (all optional/heavy deps lazy with fallbacks):
 
-* **`llm/`** — Group B escalation layer: `EscalationNarrator` consumes `ESCALATION`
+* **`llm/`** — escalation narration layer: `EscalationNarrator` consumes `ESCALATION`
   and emits a human-readable brief on `tier1.escalation_narrative`. Uses Claude
   (`claude-sonnet-4-6`) when an API key is set, else a deterministic template — wired
   into `build_system`.
@@ -299,8 +304,8 @@ disastermind/
   tier3/       ingestion (+ live fetch) · iot · dispatch   (no decision authority)
   tier2/       prediction (+ ml seam) · cascade · resource · routing · field
   tier1/       commander  (authority matrix + escalation)
-  orchestration/ triggers (Step 1) + coordination loop (Step 10)
-  llm/         Group B escalation narrator + decision-support advisor
+  orchestration/ activation triggers + coordination loop
+  llm/         escalation narrator + decision-support advisor
   storage/     PostGIS · TimescaleDB · Elasticsearch · MinIO repos + facade
   integrations/ real Kafka round-trip, PostGIS/Timescale SQL + DDL, ES query DSL, health
   api/         DashboardService + FastAPI/WebSocket dashboard + uvicorn server
@@ -337,4 +342,3 @@ tests/         unit + e2e + scenario + perf + integration (integration gated by 
 > push is the offline, stdlib-first core. Read these layers as *production-shaped
 > scaffolding with a documented turn-on path* ([`DEPLOY.md`](DEPLOY.md)), not as a
 > system already validated at runtime scale.
-# baby-boi
