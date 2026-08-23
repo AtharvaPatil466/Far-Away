@@ -3,6 +3,9 @@
 The narrator depends only on the tiny :class:`LLMClient` protocol
 (``generate(prompt: str) -> str``). Two implementations are provided:
 
+  * :class:`GeminiClient` — calls the Google Generative Language REST API using
+    the standard library only (no SDK). Used when a Gemini key is configured
+    (``DM_GEMINI_KEY``, ``GEMINI_API_KEY`` or ``GOOGLE_API_KEY``).
   * :class:`AnthropicClient` — lazily imports the ``anthropic`` SDK and calls the
     ``claude-sonnet-4-6`` model. Used ONLY when an API key is configured
     (``DM_ANTHROPIC_KEY`` or ``ANTHROPIC_API_KEY``).
@@ -27,6 +30,30 @@ ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
 #: Environment variables that may carry the Anthropic API key.
 KEY_ENV_VARS = ("DM_ANTHROPIC_KEY", "ANTHROPIC_API_KEY")
+
+#: Gemini model used when a Gemini key is configured.
+GEMINI_MODEL = "gemini-2.0-flash"
+
+#: Environment variables that may carry the Gemini API key. Keys are read from
+#: the environment ONLY — never committed, never defaulted to a literal. The
+#: repository ships ``.env.example`` with the names and no values.
+GEMINI_KEY_ENV_VARS = ("DM_GEMINI_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")
+
+GEMINI_ENDPOINT = (
+    "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+)
+
+
+def _resolve_gemini_key(settings: Settings | None = None) -> str:
+    """Return the first non-empty Gemini key from settings/env, else ""."""
+    key = getattr(settings, "gemini_key", "") if settings is not None else ""
+    if key:
+        return str(key)
+    for var in GEMINI_KEY_ENV_VARS:
+        val = os.environ.get(var, "")
+        if val:
+            return val
+    return ""
 
 
 def _resolve_api_key(settings: Settings | None = None) -> str:
@@ -118,12 +145,73 @@ class AnthropicClient(LLMClient):
         return "\n".join(parts).strip()
 
 
+class GeminiClient(LLMClient):
+    """Google Generative Language client over stdlib ``urllib`` — key-gated.
+
+    Deliberately no SDK: the runtime is standard-library-first by design, and a
+    single REST POST does not justify a dependency. Any failure (no network,
+    non-200, unexpected shape) degrades to the prompt text, so the narrator
+    still produces a usable brief and no test path can hang on a socket.
+    """
+
+    name = "gemini"
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = GEMINI_MODEL,
+        max_tokens: int = 1024,
+        timeout: float = 20.0,
+    ) -> None:
+        self.api_key = api_key
+        self.model = model
+        self.max_tokens = max_tokens
+        self.timeout = timeout
+
+    def generate(self, prompt: str) -> str:
+        import json
+        import urllib.request
+
+        url = f"{GEMINI_ENDPOINT.format(model=self.model)}?key={self.api_key}"
+        body = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"maxOutputTokens": self.max_tokens},
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            return self._extract_text(payload) or prompt
+        except Exception:  # no network / non-200 / shape — degrade gracefully
+            return prompt
+
+    @staticmethod
+    def _extract_text(payload: object) -> str:
+        """Pull plain text out of a generateContent response defensively."""
+        if not isinstance(payload, dict):
+            return ""
+        parts_out: list[str] = []
+        for candidate in payload.get("candidates", []) or []:
+            content = (candidate or {}).get("content", {}) or {}
+            for part in content.get("parts", []) or []:
+                text = (part or {}).get("text")
+                if text:
+                    parts_out.append(str(text))
+        return "\n".join(parts_out).strip()
+
+
 def make_client(settings: Settings | None = None) -> LLMClient:
     """Pick the right :class:`LLMClient` (PRD Step 7).
 
-    Returns an :class:`AnthropicClient` only when an API key is present; otherwise
-    the deterministic, network-free :class:`TemplateClient`.
+    Gemini wins when its key is set, then Anthropic; with neither key present the
+    deterministic, network-free :class:`TemplateClient` is returned. Keys come
+    from the environment, so a checkout carries no credential.
     """
+    gemini_key = _resolve_gemini_key(settings)
+    if gemini_key:
+        return GeminiClient(api_key=gemini_key)
     key = _resolve_api_key(settings)
     if key:
         return AnthropicClient(api_key=key)
