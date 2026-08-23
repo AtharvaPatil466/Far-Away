@@ -21,9 +21,12 @@ so no test path ever touches the network.
 from __future__ import annotations
 
 import abc
+import logging
 import os
 
 from ..core.config import Settings
+
+log = logging.getLogger("disastermind.llm.client")
 
 #: The single model this layer is authorised to call (spec requirement).
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
@@ -31,8 +34,11 @@ ANTHROPIC_MODEL = "claude-sonnet-4-6"
 #: Environment variables that may carry the Anthropic API key.
 KEY_ENV_VARS = ("DM_ANTHROPIC_KEY", "ANTHROPIC_API_KEY")
 
-#: Gemini model used when a Gemini key is configured.
-GEMINI_MODEL = "gemini-2.0-flash"
+#: Gemini model used when a Gemini key is configured. Verified against the live
+#: models endpoint: "gemini-2.0-flash" 404s, "gemini-flash-latest" is an alias
+#: that keeps working as Google rolls versions forward, which matters more than
+#: pinning for a narration path that degrades safely.
+GEMINI_MODEL = "gemini-flash-latest"
 
 #: Environment variables that may carry the Gemini API key. Keys are read from
 #: the environment ONLY — never committed, never defaulted to a literal. The
@@ -162,14 +168,38 @@ class GeminiClient(LLMClient):
         model: str = GEMINI_MODEL,
         max_tokens: int = 1024,
         timeout: float = 20.0,
+        max_attempts: int = 3,
+        retry_backoff_s: float = 0.6,
     ) -> None:
         self.api_key = api_key
         self.model = model
         self.max_tokens = max_tokens
         self.timeout = timeout
+        self.max_attempts = max_attempts
+        self.retry_backoff_s = retry_backoff_s
+
+    @staticmethod
+    def _ssl_context():
+        """Default SSL context, falling back to certifi's CA bundle.
+
+        A bare python.org install on macOS has no system CA store, so an
+        otherwise-correct request fails with CERTIFICATE_VERIFY_FAILED. The
+        ingestion path already handles this the same way (``live/usgs_shadow``);
+        certifi stays optional because CI runners have a working store.
+        """
+        import ssl
+
+        try:
+            import certifi  # type: ignore  # optional
+
+            return ssl.create_default_context(cafile=certifi.where())
+        except Exception:
+            return ssl.create_default_context()
 
     def generate(self, prompt: str) -> str:
         import json
+        import time
+        import urllib.error
         import urllib.request
 
         url = f"{GEMINI_ENDPOINT.format(model=self.model)}?key={self.api_key}"
@@ -180,12 +210,33 @@ class GeminiClient(LLMClient):
         request = urllib.request.Request(
             url, data=body, headers={"Content-Type": "application/json"}, method="POST"
         )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-            return self._extract_text(payload) or prompt
-        except Exception:  # no network / non-200 / shape — degrade gracefully
-            return prompt
+        # Retry TRANSIENT failures only. The endpoint returns 503 under load
+        # often enough to matter, and a brief that silently falls back on the
+        # first blip is worse than one that waits a second. 4xx is a
+        # configuration error -- wrong key, wrong model -- and retrying it just
+        # delays the same answer, so those degrade immediately.
+        last_error: Exception | None = None
+        for attempt in range(self.max_attempts):
+            try:
+                with urllib.request.urlopen(
+                    request, timeout=self.timeout, context=self._ssl_context()
+                ) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                return self._extract_text(payload) or prompt
+            except urllib.error.HTTPError as exc:
+                last_error = exc
+                if exc.code < 500:
+                    break
+            except Exception as exc:  # transport / shape
+                last_error = exc
+            if attempt + 1 < self.max_attempts:
+                time.sleep(self.retry_backoff_s * (attempt + 1))
+
+        log.warning(
+            "gemini call failed after %d attempt(s) (%s); degrading to the prompt",
+            self.max_attempts, last_error,
+        )
+        return prompt
 
     @staticmethod
     def _extract_text(payload: object) -> str:

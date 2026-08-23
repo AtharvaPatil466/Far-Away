@@ -78,3 +78,44 @@ def test_no_credential_is_hardcoded_anywhere_in_the_module():
     source = inspect.getsource(mod)
     assert "AIza" not in source, "a Google API key literal is present in the source"
     assert "sk-ant-" not in source, "an Anthropic key literal is present in the source"
+
+
+def test_transient_5xx_is_retried_then_succeeds(monkeypatch):
+    """503 under load is common on this endpoint; one blip must not degrade."""
+    import urllib.error
+
+    calls = {"n": 0}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"candidates":[{"content":{"parts":[{"text":"ordered"}]}}]}'
+
+    def flaky(*_a, **_k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise urllib.error.HTTPError("u", 503, "Service Unavailable", {}, None)
+        return _Resp()
+
+    monkeypatch.setattr("urllib.request.urlopen", flaky)
+    client = GeminiClient(api_key="k", retry_backoff_s=0)
+
+    assert client.generate("brief") == "ordered"
+    assert calls["n"] == 2
+
+
+def test_client_error_is_not_retried(monkeypatch):
+    """A 404 is a wrong model or key — retrying only delays the same answer."""
+    import urllib.error
+
+    calls = {"n": 0}
+
+    def not_found(*_a, **_k):
+        calls["n"] += 1
+        raise urllib.error.HTTPError("u", 404, "Not Found", {}, None)
+
+    monkeypatch.setattr("urllib.request.urlopen", not_found)
+    client = GeminiClient(api_key="k", retry_backoff_s=0)
+
+    assert client.generate("brief") == "brief"
+    assert calls["n"] == 1, "a configuration error must not be retried"
