@@ -18,6 +18,7 @@ import hashlib
 import json
 import logging
 import os
+import threading
 from typing import Any
 
 from ..core.contracts import Message
@@ -35,6 +36,13 @@ class DecisionLogger:
     def __init__(self, path: str = "./audit.jsonl", elasticsearch_url: str = "") -> None:
         self.path = path
         self.elasticsearch_url = elasticsearch_url
+        # Appending is read-modify-write: read the tip, hash against it, persist,
+        # advance. Two threads interleaving there produce two records claiming
+        # the same _prev — a permanent fork that verify_chain can never accept.
+        # Real writers exist (the API's loop-driver thread, the Kafka consumer
+        # thread), so this is a live race, not a theoretical one. RLock because
+        # truncate_torn_tail re-enters via _load_tip.
+        self._lock = threading.RLock()
         self._prev_hash = self._load_tip()
         self._es = self._connect_es() if elasticsearch_url else None
 
@@ -45,6 +53,7 @@ class DecisionLogger:
         inst = cls.__new__(cls)
         inst.path = ""
         inst.elasticsearch_url = ""
+        inst._lock = threading.RLock()
         inst._prev_hash = GENESIS
         inst._es = None
         inst.memory: list[dict] = []
@@ -52,6 +61,17 @@ class DecisionLogger:
 
     # ---------------------------------------------------------------- helpers
     def _load_tip(self) -> str:
+        """Hash to chain the next record onto, recovered past an incomplete write.
+
+        A hard kill mid-append leaves a TORN final line. Parsing stops there and
+        the last COMPLETE record's hash is returned, so writing resumes on the
+        real chain rather than starting a new one.
+
+        Previously the JSONDecodeError escaped to a broad ``except`` that logged
+        a full traceback on every read and claimed it was "starting fresh
+        chain". The return value was in fact correct; the message was not, and
+        the traceback made a survivable power cut look like a crash bug.
+        """
         if not os.path.exists(self.path):
             return GENESIS
         tip = GENESIS
@@ -59,11 +79,72 @@ class DecisionLogger:
             with open(self.path, encoding="utf-8") as fh:
                 for line in fh:
                     line = line.strip()
-                    if line:
+                    if not line:
+                        continue
+                    try:
                         tip = json.loads(line).get("_hash", tip)
-        except Exception:
-            log.exception("could not read audit tip; starting fresh chain")
+                    except json.JSONDecodeError:
+                        log.warning(
+                            "%s ends in an incomplete record (interrupted write); "
+                            "resuming from the last complete entry. Repair with "
+                            "truncate_torn_tail() once the cause is understood.",
+                            self.path,
+                        )
+                        break
+        except OSError:
+            log.exception("could not read audit log %s", self.path)
         return tip
+
+    def torn_lines(self) -> int:
+        """Count trailing lines that could not be parsed (incomplete writes)."""
+        if not self.path or not os.path.exists(self.path):
+            return 0
+        torn = 0
+        with open(self.path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                if torn:
+                    torn += 1
+                    continue
+                try:
+                    json.loads(line)
+                except json.JSONDecodeError:
+                    torn = 1
+        return torn
+
+    def truncate_torn_tail(self) -> int:
+        """Drop trailing unparseable lines. Returns how many were removed.
+
+        Deliberate, never automatic. An interrupted write is not a record, so
+        nothing is lost -- but "the last write did not finish" and "someone
+        edited this" must not look the same to an operator, so the log keeps
+        failing verification until a human decides to repair it.
+        """
+        with self._lock:
+            return self._truncate_torn_tail_locked()
+
+    def _truncate_torn_tail_locked(self) -> int:
+        torn = self.torn_lines()
+        if not torn:
+            return 0
+        keep: list[str] = []
+        with open(self.path, encoding="utf-8") as fh:
+            for line in fh:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    json.loads(stripped)
+                except json.JSONDecodeError:
+                    break
+                keep.append(stripped)
+        with open(self.path, "w", encoding="utf-8") as fh:
+            for line in keep:
+                fh.write(line + "\n")
+        self._prev_hash = self._load_tip()
+        return torn
 
     def _connect_es(self):  # pragma: no cover - optional dependency
         try:
@@ -82,10 +163,14 @@ class DecisionLogger:
     def record(self, message: Message) -> dict[str, Any]:
         rec = message.to_dict()
         body = json.dumps(rec, sort_keys=True, separators=(",", ":"))
-        rec["_prev"] = self._prev_hash
-        rec["_hash"] = self._hash(self._prev_hash, body)
-        self._persist(rec)
-        self._prev_hash = rec["_hash"]
+        with self._lock:
+            rec["_prev"] = self._prev_hash
+            rec["_hash"] = self._hash(self._prev_hash, body)
+            # Persist BEFORE advancing: _persist raises on write failure, so a
+            # failed append leaves the tip where it was rather than stranding
+            # the chain on a hash that was never written.
+            self._persist(rec)
+            self._prev_hash = rec["_hash"]
         return rec
 
     def log_prediction(
@@ -101,10 +186,11 @@ class DecisionLogger:
             "incident_id": incident_id,
         }
         body = json.dumps(rec, sort_keys=True, separators=(",", ":"))
-        rec["_prev"] = self._prev_hash
-        rec["_hash"] = self._hash(self._prev_hash, body)
-        self._persist(rec)
-        self._prev_hash = rec["_hash"]
+        with self._lock:
+            rec["_prev"] = self._prev_hash
+            rec["_hash"] = self._hash(self._prev_hash, body)
+            self._persist(rec)
+            self._prev_hash = rec["_hash"]
         return rec
 
     def _persist(self, rec: dict) -> None:

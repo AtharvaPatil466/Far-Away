@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import './provenance.css'
 import type { FieldSelection, ProvenanceDoc, Revision } from './types'
 
@@ -90,19 +91,27 @@ function WhyField({ sel }: { sel: FieldSelection }) {
   )
 }
 
+const SCENARIOS = [
+  { file: 'provenance.json', label: 'Conflicting magnitudes' },
+  { file: 'provenance_vindication.json', label: 'Overruled — and wrong' },
+]
+
 export function Provenance() {
   const [doc, setDoc] = useState<ProvenanceDoc | null>(null)
   const [failed, setFailed] = useState(false)
   const [meaningfulOnly, setMeaningfulOnly] = useState(false)
   const [open, setOpen] = useState<number | null>(null)
+  const [scenario, setScenario] = useState(0)
 
   useEffect(() => {
     const base = import.meta.env.BASE_URL || '/'
-    fetch(`${base}data/provenance.json`)
+    setDoc(null)
+    setOpen(null)
+    fetch(`${base}data/${SCENARIOS[scenario].file}`)
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then((d: ProvenanceDoc) => setDoc(d))
       .catch(() => setFailed(true))
-  }, [])
+  }, [scenario])
 
   if (failed) return <div className="prov">Provenance view unavailable — run `make provenance`.</div>
   if (!doc) return null
@@ -117,12 +126,38 @@ export function Provenance() {
       <div className="prov-head">
         <h2>INCIDENT PROVENANCE</h2>
         <span className="prov-id">{doc.incident_id}</span>
-        <div className="prov-counts">
-          <span className="prov-count on">{doc.counts.total} revisions</span>
-          <span className="prov-count on">{doc.counts.meaningful} meaningful</span>
-          <span className="prov-count">{doc.counts.minor} minor</span>
-          <span className="prov-count">{doc.observations.length} observations</span>
+        <div className="prov-scenarios">
+          {SCENARIOS.map((s, i) => (
+            <button key={s.file} className={`prov-count ${i === scenario ? 'on' : ''}`}
+                    onClick={() => setScenario(i)}>
+              {s.label}
+            </button>
+          ))}
         </div>
+      </div>
+
+      {/* Judges read numbers before timelines, and "9 observations, 9 revisions"
+          invites the question of where the duplicate went. The whole chain is
+          shown so the arithmetic closes on screen instead of being inferred. */}
+      <div className="prov-ledger">
+        <span><strong>{doc.counts.reports_received}</strong> reports received</span>
+        <span className="op">−</span>
+        <span><strong>{doc.counts.duplicates_suppressed}</strong> duplicate</span>
+        <span className="op">=</span>
+        <span><strong>{doc.counts.observations}</strong> observations</span>
+        <span className="op">→</span>
+        <span>
+          <strong>{doc.counts.total}</strong> revisions
+          {doc.counts.no_op > 0 && (
+            <em title="a late correction that lost to newer data still earns a row">
+              {' '}({doc.counts.no_op} no-op)
+            </em>
+          )}
+        </span>
+        <span className="op">→</span>
+        <span className="hot"><strong>{doc.counts.meaningful}</strong> meaningful</span>
+        <span className="op">/</span>
+        <span><strong>{doc.counts.minor}</strong> minor</span>
       </div>
 
       {/* The strongest available demonstration of "meaningful": the control
@@ -149,7 +184,8 @@ export function Provenance() {
             open === rev.seq ? 'open' : '',
           ].join(' ')
           return (
-            <div key={rev.seq}>
+            <ErrorBoundary key={rev.seq} inline label={`revision #${rev.seq}`}>
+            <div>
               <button className={cls} onClick={() => setOpen(open === rev.seq ? null : rev.seq)}>
                 <span className="t">{clock(rev.at)}</span>
                 <span className="src">{rev.source}</span>
@@ -164,6 +200,7 @@ export function Provenance() {
               </button>
               {open === rev.seq && <RevisionDetail rev={rev} doc={doc} />}
             </div>
+            </ErrorBoundary>
           )
         })}
       </div>
@@ -173,7 +210,9 @@ export function Provenance() {
       </h3>
       <div className="prov-fields">
         {Object.values(doc.canonical.fields).map((sel) => (
-          <WhyField key={sel.field} sel={sel} />
+          <ErrorBoundary key={sel.field} inline label={`field ${sel.field}`}>
+            <WhyField sel={sel} />
+          </ErrorBoundary>
         ))}
       </div>
 

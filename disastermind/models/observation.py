@@ -87,15 +87,6 @@ class Observation:
             return tuple(str(f) for f in marker)
         return ()
 
-    @property
-    def is_late(self) -> bool:
-        """Observed before it was received by more than the duplicate window.
-
-        Every observation is 'late' in the trivial sense; this flags the ones
-        late enough to be a correction arriving after the fact.
-        """
-        return _seconds_between(self.observed_at, self.received_at) > DUPLICATE_TIME_WINDOW_S
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "obs_id": self.obs_id,
@@ -106,7 +97,6 @@ class Observation:
             "payload": dict(self.payload),
             "content_hash": self.content_hash,
             "is_retraction": self.is_retraction,
-            "is_late": self.is_late,
         }
 
 
@@ -165,6 +155,11 @@ class ObservationStore:
         self.incident_id = incident_id
         self._observations: list[Observation] = []
         self._hashes: set[str] = set()
+        #: Reports rejected as exact replays. Counted rather than dropped so the
+        #: inspector can reconcile "reports received" against "observations
+        #: stored" -- otherwise a duplicate silently vanishes and the totals on
+        #: screen look like an arithmetic error.
+        self.duplicates_suppressed = 0
 
     def __len__(self) -> int:
         return len(self._observations)
@@ -177,6 +172,7 @@ class ObservationStore:
         doing nothing.
         """
         if obs.content_hash in self._hashes:
+            self.duplicates_suppressed += 1
             return None, "duplicate: identical content already stored"
         stored = Observation(
             source=obs.source,
@@ -197,16 +193,16 @@ class ObservationStore:
     def by_id(self, obs_id: str) -> Observation | None:
         return next((o for o in self._observations if o.obs_id == obs_id), None)
 
-    def reporting(self, field_name: str) -> list[Observation]:
-        """Observations carrying ``field_name`` (retractions included)."""
-        return [
-            o for o in self._observations
-            if field_name in o.payload or (o.is_retraction and field_name in o.retracted_fields())
-        ]
+    @property
+    def reports_received(self) -> int:
+        """Everything that arrived, including the replays that were suppressed."""
+        return len(self._observations) + self.duplicates_suppressed
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "incident_id": self.incident_id,
             "count": len(self._observations),
+            "reports_received": self.reports_received,
+            "duplicates_suppressed": self.duplicates_suppressed,
             "observations": [o.to_dict() for o in self._observations],
         }

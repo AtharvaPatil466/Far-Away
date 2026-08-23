@@ -144,16 +144,20 @@
       "RETRACTION": 1,
       "UPDATE": 2
     },
+    "duplicates_suppressed": 1,
     "meaningful": 6,
     "minor": 3,
+    "no_op": 0,
+    "observations": 9,
+    "reports_received": 10,
     "suppressed_by_toggle": 3,
     "total": 9
   },
   "incident_id": "eq-2026-0822-puri",
+  "label": "Conflicting magnitudes",
   "observations": [
     {
       "content_hash": "da3d56ddfafffa188b16d1be64e38782e1f07435213e1ce790088ce3613471a8",
-      "is_late": false,
       "is_retraction": false,
       "obs_id": "obs-001",
       "observed_at": "2026-08-22T10:00:00+00:00",
@@ -170,7 +174,6 @@
     },
     {
       "content_hash": "502b1ad45c3864e7183481a590da640d9256f48ba0394ac2145ced8c5742c094",
-      "is_late": false,
       "is_retraction": false,
       "obs_id": "obs-003",
       "observed_at": "2026-08-22T10:10:00+00:00",
@@ -185,7 +188,6 @@
     },
     {
       "content_hash": "f2a57574b9f34bc4ae2115968ef14d09cb38a1eb10465b4022b41532f0250086",
-      "is_late": true,
       "is_retraction": false,
       "obs_id": "obs-004",
       "observed_at": "2026-08-22T10:10:00+00:00",
@@ -198,7 +200,6 @@
     },
     {
       "content_hash": "97406f316feec77128c2b68bce8ee77f56898ebe44dfe8fae35b1875eb2ce0a7",
-      "is_late": true,
       "is_retraction": false,
       "obs_id": "obs-005",
       "observed_at": "2026-08-22T10:10:00+00:00",
@@ -211,7 +212,6 @@
     },
     {
       "content_hash": "004e7af0422d53e4a53ae5be85cdc5733a3bee0785a6ac87d17402fe3ef6151b",
-      "is_late": false,
       "is_retraction": false,
       "obs_id": "obs-006",
       "observed_at": "2026-08-22T10:40:00+00:00",
@@ -224,7 +224,6 @@
     },
     {
       "content_hash": "931d7b98430e36b4da601dfa804952c5c196dad11e5955444d25116ded3b188f",
-      "is_late": true,
       "is_retraction": false,
       "obs_id": "obs-007",
       "observed_at": "2026-08-22T10:05:00+00:00",
@@ -237,7 +236,6 @@
     },
     {
       "content_hash": "9d28f1d7e58a2481b8c9d8522e851aba85022c0989d6ed6167ad86a1f2c1adb2",
-      "is_late": false,
       "is_retraction": true,
       "obs_id": "obs-008",
       "observed_at": "2026-08-22T11:00:00+00:00",
@@ -252,7 +250,6 @@
     },
     {
       "content_hash": "b2a1b27a3bdfd4b41d68a4782eee8100305fd955283cfd2db3ac7f840aac8bd5",
-      "is_late": false,
       "is_retraction": false,
       "obs_id": "obs-009",
       "observed_at": "2026-08-22T11:10:00+00:00",
@@ -265,7 +262,6 @@
     },
     {
       "content_hash": "9dfeef94d4f635ccdea4f37d0a94960cb105e5658e9bd2f5d72f84b051197e3c",
-      "is_late": false,
       "is_retraction": false,
       "obs_id": "obs-010",
       "observed_at": "2026-08-22T11:10:00+00:00",
@@ -428,10 +424,20 @@
     {
       "at": "2026-08-22T10:50:00+00:00",
       "causing_obs_id": "obs-007",
-      "changes": [],
+      "changes": [
+        {
+          "after": 6.2,
+          "before": 6.2,
+          "contested": true,
+          "field": "magnitude",
+          "kind": "dissent",
+          "rule": "recency",
+          "rule_reason": "emsc reported 5.9 and was OVERRULED (equal authority; usgs observed later (2026-08-22T10:40:00+00:00 > 2026-08-22T10:10:00+00:00)); kept visible as a flagged alternative"
+        }
+      ],
       "classification": "MINOR",
       "kind": "LATE_CORRECTION",
-      "reason": "observed 2026-08-22T10:05:00+00:00 but delivered after a newer report; canonical state unchanged \u2014 recorded, not applied",
+      "reason": "observed 2026-08-22T10:05:00+00:00 but delivered after a newer report; canonical value unchanged \u2014 recorded, not applied",
       "recommendation_after": "ORDER_BY_DEADLINE",
       "recommendation_before": "ORDER_BY_DEADLINE",
       "seq": 6,

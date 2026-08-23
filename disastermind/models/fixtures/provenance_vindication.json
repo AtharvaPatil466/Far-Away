@@ -1,0 +1,25 @@
+{
+  "_about": "The uncomfortable case: the policy picks a winner by authority, flags the dissenter as an alternative, and is later shown to have been wrong — because the authoritative source itself revises toward the value it had overruled. Depth ranks USGS above NCS (global inversion beats regional for depth), so authority genuinely decides here. Nothing is special-cased; this runs through the same fold as every other incident.",
+  "incident_id": "eq-2026-0822-vindication",
+  "observations": [
+    {"step": "v0", "source": "usgs", "source_event_id": "us8000wxyz",
+     "observed_at": "2026-08-22T14:00:00+00:00", "received_at": "2026-08-22T14:02:00+00:00",
+     "payload": {"magnitude": 6.1, "depth_km": 10.0, "lat": 19.75, "lon": 85.95},
+     "note": "initial USGS solution — shallow, which drives the severe branch"},
+
+    {"step": "v1", "source": "india_ncs", "source_event_id": "ncs-2026-1207",
+     "observed_at": "2026-08-22T14:06:00+00:00", "received_at": "2026-08-22T14:08:00+00:00",
+     "payload": {"depth_km": 45.0},
+     "note": "NCS reads it far deeper. Authority says USGS wins on depth, so this is OVERRULED and flagged."},
+
+    {"step": "v2", "source": "emsc", "source_event_id": "emsc-993318",
+     "observed_at": "2026-08-22T14:12:00+00:00", "received_at": "2026-08-22T14:14:00+00:00",
+     "payload": {"depth_km": 44.0},
+     "note": "EMSC agrees with NCS. Two flagged alternatives now corroborate each other — still overruled by authority."},
+
+    {"step": "v3", "source": "usgs", "source_event_id": "us8000wxyz-r2",
+     "observed_at": "2026-08-22T14:30:00+00:00", "received_at": "2026-08-22T14:31:00+00:00",
+     "payload": {"depth_km": 42.0},
+     "note": "USGS revises toward the value it had overruled. The flagged alternatives were right all along, and the timeline shows they were on screen the whole time."}
+  ]
+}

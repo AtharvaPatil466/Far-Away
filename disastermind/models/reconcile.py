@@ -361,6 +361,14 @@ def classify(changes: list[dict[str, Any]], rec_before: str, rec_after: str) -> 
         if delta is not None and delta > tol:
             return MEANINGFUL, f"{name} moved {delta:.3g}, beyond its {tol:g} tolerance"
 
+    dissents = [c for c in changes if c.get("kind") == "dissent"]
+    if dissents and len(dissents) == len(changes):
+        first = dissents[0]
+        return MINOR, (
+            f"{first['field']} unchanged — a source disagreed and was overruled. "
+            f"Recorded so the dissent is on the record if it is later vindicated."
+        )
+
     rule_only = [c for c in changes if c["before"] == c["after"]]
     if rule_only and len(rule_only) == len(changes):
         first = rule_only[0]
@@ -379,13 +387,50 @@ def classify(changes: list[dict[str, Any]], rec_before: str, rec_after: str) -> 
     return MINOR, f"sub-tolerance jitter, {detail}"
 
 
+def _dissent_fingerprint(selection: FieldSelection | None) -> tuple:
+    """The flagged alternatives, as a comparable set."""
+    if selection is None:
+        return ()
+    return tuple(sorted(
+        (a.source, str(a.value)) for a in selection.alternatives if a.beyond_tolerance
+    ))
+
+
 def _diff(before: CanonicalState, after: CanonicalState) -> list[dict[str, Any]]:
     changes = []
     for name in sorted(set(before.fields) | set(after.fields)):
         b, a = before.fields.get(name), after.fields.get(name)
         b_val = b.value if b else None
         a_val = a.value if a else None
-        if b_val == a_val and (a.rule if a else None) == (b.rule if b else None):
+        same_value = b_val == a_val
+        same_rule = (a.rule if a else None) == (b.rule if b else None)
+
+        # A dissent that gets OVERRULED changes no canonical value, so a plain
+        # value diff never sees it -- and the source that disagreed would never
+        # appear in the timeline at all. That is exactly the record you need
+        # when the overruled value later turns out to have been right, so a new
+        # flagged alternative earns its own row.
+        if same_value and same_rule:
+            if _dissent_fingerprint(b) != _dissent_fingerprint(a) and a is not None:
+                new_flags = [
+                    alt for alt in a.alternatives
+                    if alt.beyond_tolerance
+                    and (alt.source, str(alt.value)) not in _dissent_fingerprint(b)
+                ]
+                if new_flags:
+                    flag = new_flags[0]
+                    changes.append({
+                        "field": name,
+                        "before": a_val,
+                        "after": a_val,
+                        "rule": a.rule,
+                        "rule_reason": (
+                            f"{flag.source} reported {flag.value} and was OVERRULED "
+                            f"({a.reason}); kept visible as a flagged alternative"
+                        ),
+                        "kind": "dissent",
+                        "contested": True,
+                    })
             continue
         changes.append({
             "field": name,
@@ -496,17 +541,37 @@ def append_revisions_to_chain(logger, incident_id: str, revisions: list[Revision
     return written
 
 
-def counts(revisions: list[Revision]) -> dict[str, Any]:
-    """Totals the inspector displays, so 'suppressed' is a number, not a vibe."""
+def counts(revisions: list[Revision], store: Any = None) -> dict[str, Any]:
+    """Totals the inspector displays, arranged so a reader can RECONCILE them.
+
+    "9 observations, 9 revisions" invites the obvious question: what happened to
+    the duplicate, and did every observation really change something? Both
+    answers are numbers we already have, so they are reported rather than left
+    to be inferred:
+
+        reports_received - duplicates_suppressed = observations
+        observations                             = revisions + no_op_arrivals...
+
+    ``no_op`` counts revisions that changed no canonical value -- a late
+    correction that lost to newer data still earns a timeline row, and without
+    this count that row looks like an off-by-one.
+    """
     meaningful = [r for r in revisions if r.classification == MEANINGFUL]
     minor = [r for r in revisions if r.classification == MINOR]
     by_kind: dict[str, int] = {}
     for revision in revisions:
         by_kind[revision.kind] = by_kind.get(revision.kind, 0) + 1
-    return {
+
+    totals: dict[str, Any] = {
         "total": len(revisions),
         "meaningful": len(meaningful),
         "minor": len(minor),
         "suppressed_by_toggle": len(minor),
+        "no_op": len([r for r in revisions if not r.changes]),
         "by_kind": by_kind,
     }
+    if store is not None:
+        totals["observations"] = len(store.all())
+        totals["duplicates_suppressed"] = store.duplicates_suppressed
+        totals["reports_received"] = store.reports_received
+    return totals

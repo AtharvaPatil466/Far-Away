@@ -104,6 +104,39 @@ Plus the case that has no happy answer:
 
 ---
 
+## When the policy is wrong
+
+Field-level precedence is a **heuristic**. USGS really does run the better global
+depth inversion, so ranking it above NCS on depth is the right default — and a
+default that is right on average is still wrong on individual events. Any
+ranking sharp enough to decide is sharp enough to decide incorrectly.
+
+The design response is not to claim a better ranking. It is to **never discard
+the alternative**, so that when the heuristic is wrong the evidence is already on
+the record rather than reconstructed afterwards.
+
+The second demo scenario (`Overruled — and wrong`) exists to show exactly that,
+and it is committed precisely because it is unflattering:
+
+| | | |
+|---|---|---|
+| v0 | USGS reports depth **10 km** | authority selects it |
+| v1 | NCS reports **45 km** | **OVERRULED** by authority — flagged, kept visible |
+| v2 | EMSC reports **44 km** | **OVERRULED** — a second flagged alternative, agreeing with the first |
+| v3 | USGS revises to **42 km** | the overruled sources were right the whole time |
+
+Two things are worth reading off that table. The system was **wrong for three
+steps** — it asserted 10 km while two independent agencies said ~45. And it was
+**never hiding anything**: both dissents were on screen, flagged, with the rule
+that overruled them named, before the correction arrived. An operator watching
+this incident could have questioned the depth at v1. The record does not have to
+be excavated after the fact; it was the interface all along.
+
+That is also why an overruled dissent earns its own timeline row even though it
+changes no canonical value. A dissent that loses is invisible to a plain
+before/after diff — and the moment it becomes interesting is exactly the moment
+it turns out to have been right.
+
 ## Inspecting it
 
 **Console → PROVENANCE** (a primary view, not a debug panel):

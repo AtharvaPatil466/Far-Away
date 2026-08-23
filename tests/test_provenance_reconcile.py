@@ -295,3 +295,118 @@ def test_no_demo_path_opens_a_socket(monkeypatch):
     reconcile(incident_id, store.all())
     counts(history)
     render()
+
+
+def test_counts_arithmetic_is_internally_consistent():
+    """Every revision lands in exactly one classification and one kind."""
+    incident_id, store = _fixture_store()
+    revisions = build_history(incident_id, store.all())
+    totals = counts(revisions)
+
+    assert totals["total"] == len(revisions)
+    assert totals["total"] == totals["meaningful"] + totals["minor"]
+    assert totals["suppressed_by_toggle"] == totals["minor"]
+    assert sum(totals["by_kind"].values()) == totals["total"], "a kind was lost or double-counted"
+    assert totals["meaningful"] == len([r for r in revisions if r.classification == MEANINGFUL])
+
+
+def test_retraction_downgrade_is_meaningful_and_keeps_the_prior_recommendation():
+    """A withdrawal that LOWERS the recommendation is still a promotion event.
+
+    Downgrades are the easy thing to under-report — nothing got worse, so the
+    instinct is to treat it as housekeeping. But an evacuation order being
+    withdrawn is exactly what a commander must see, and the timeline has to
+    retain what it was before, or the row reads as if it had always been HOLD.
+    """
+    incident_id, store = _fixture_store()
+    revision = next(r for r in build_history(incident_id, store.all()) if r.kind == "RETRACTION")
+
+    assert revision.classification == MEANINGFUL
+    assert revision.recommendation_before == "ORDER_BY_DEADLINE"
+    assert revision.recommendation_after != revision.recommendation_before
+    assert "ORDER_BY_DEADLINE" in revision.reason, "the prior state must stay legible"
+    assert revision.changes, "the causing field change must remain visible"
+
+
+def test_whole_report_retraction_withdraws_every_field_it_carried():
+    """`{"retracted": true}` withdraws the source's whole prior report.
+
+    The demo fixture only exercises the field-list form, so this pins the other
+    branch — a judge asking "what if a source withdraws everything?" gets a
+    defined answer rather than a discovered one.
+    """
+    reported = obs("usgs", "u1", T(0), T(1), {"magnitude": 6.2, "depth_km": 10.0})
+    withdrawn = obs("usgs", "u1w", T(10), T(11),
+                    {"retracted": True, "magnitude": None, "depth_km": None})
+
+    state = reconcile(INC, [reported, withdrawn])
+
+    assert set(withdrawn.retracted_fields()) == {"magnitude", "depth_km"}
+    assert state.value("magnitude") is None
+    assert state.value("depth_km") is None
+    assert state.fields["magnitude"].rule == "retracted"
+
+
+# ------------------------------------------------------- overruled dissent
+VINDICATION = os.path.join(os.path.dirname(FIXTURE), "provenance_vindication.json")
+
+
+def _vindication():
+    from disastermind.api.app.history_routes import load_store
+    store = load_store(VINDICATION)
+    return store.incident_id, store
+
+
+def test_an_overruled_dissent_still_earns_a_timeline_row():
+    """A dissent that loses changes no value, so a plain diff never sees it.
+
+    Without a row, the source that disagreed never appears in the timeline at
+    all — which is precisely the record you need when the overruled value later
+    turns out to have been right.
+    """
+    incident_id, store = _vindication()
+    history = build_history(incident_id, store.all())
+
+    dissent_rows = [
+        r for r in history
+        if any(c.get("kind") == "dissent" for c in r.changes)
+    ]
+
+    assert len(dissent_rows) == 2, "both overruled sources must appear"
+    assert {r.source for r in dissent_rows} == {"india_ncs", "emsc"}
+    assert all(r.classification == MINOR for r in dissent_rows), "recorded, not promoted"
+    assert all("OVERRULED" in c["rule_reason"]
+               for r in dissent_rows for c in r.changes if c.get("kind") == "dissent")
+
+
+def test_the_flagged_alternative_is_vindicated_by_a_later_revision():
+    """Authority picked USGS at 10 km; NCS and EMSC said ~45 and were flagged.
+
+    USGS then revises to 42 — the overruled dissenters were right the whole
+    time, and the timeline proves they were on screen before the correction.
+    """
+    incident_id, store = _vindication()
+    history = build_history(incident_id, store.all())
+    final = reconcile(incident_id, store.all())
+
+    overruled_values = [
+        float(c["rule_reason"].split("reported ")[1].split(" ")[0])
+        for r in history for c in r.changes if c.get("kind") == "dissent"
+    ]
+    corrected = float(final.value("depth_km"))
+
+    assert corrected == 42.0
+    # every dissent landed nearer the truth than the value that overruled them
+    assert all(abs(v - corrected) < abs(10.0 - corrected) for v in overruled_values)
+    assert history[-1].classification == MEANINGFUL
+
+
+def test_dissent_rows_do_not_disturb_the_main_demo_counts():
+    """The earthquake fixture's narrative must be unchanged by this feature."""
+    incident_id, store = _fixture_store()
+    totals = counts(build_history(incident_id, store.all()), store)
+
+    assert totals["reports_received"] == 10
+    assert totals["duplicates_suppressed"] == 1
+    assert totals["observations"] == 9
+    assert totals["reports_received"] - totals["duplicates_suppressed"] == totals["observations"]
