@@ -347,3 +347,7 @@ tests/         unit + e2e + scenario + perf + integration (integration gated by 
 > push is the offline, stdlib-first core. Read these layers as *production-shaped
 > scaffolding with a documented turn-on path* ([`DEPLOY.md`](DEPLOY.md)), not as a
 > system already validated at runtime scale.
+>
+> Every known reliability, scalability and validation limit is consolidated in
+> **[`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md)** — including the ones that
+> are not flattering.
