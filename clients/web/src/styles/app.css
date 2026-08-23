@@ -158,7 +158,10 @@
   --spacing-md: 20px;
   --spacing-margin: 24px;
   --spacing-lg: 32px;
-  --spacing-xl: 48px;
+  /* Keep named layout spacing out of Tailwind's built-in `xl` namespace.
+     `--spacing-xl` also backs width utilities in Tailwind v4, which made
+     `max-w-xl` resolve to 48px instead of the expected 36rem. */
+  --spacing-layout-xl: 48px;
   --spacing-margin-mobile: 16px;
   --spacing-margin-desktop: 32px;
   --spacing-inversa-5: var(--inversa-space-5);
