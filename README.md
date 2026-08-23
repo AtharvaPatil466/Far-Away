@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/ci.yml/badge.svg)](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/ci.yml)
 [![shadow season](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/shadow-season.yml/badge.svg)](https://github.com/AtharvaPatil466/Far-Away/actions/workflows/shadow-season.yml)
-![Tests](https://img.shields.io/badge/tests-1349%20py%20%2B%2017%20web-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1366%20py%20%2B%2044%20web-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen)
 ![Typecheck](https://img.shields.io/badge/mypy-core%20gated-blue)
 ![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
@@ -104,7 +104,7 @@ metrics exactly with zero optional dependencies.
 
 ```bash
 # stdlib-only: no broker, solver, ML lib or network required
-python -m pytest -q                      # 1349 tests, all offline (stdlib only)
+python -m pytest -q                      # 1366 tests, all offline (stdlib only)
 
 python - <<'PY'                          # drive a synthetic disaster
 from disastermind.orchestration.build import build_system, should_activate, Signals
@@ -178,6 +178,40 @@ pip install -e '.[storage]'   # psycopg, elasticsearch, minio
 pip install -e '.[all]'       # everything
 ```
 
+## Conflicting, duplicate and partially-matching reports
+
+Agencies disagree. USGS and India's NCS routinely publish different magnitudes for
+one earthquake — different networks, different scales, neither wrong. Every inbound
+report is stored as an immutable **Observation**; the canonical incident is
+*derived* from that set and never edited in place, so replaying the observations
+rebuilds it exactly. Selection uses `observed_at`, never `received_at`, which makes
+canonical state a pure function of the observation set — **arrival order cannot
+change the answer**.
+
+Policy, per field: **authority → recency → corroboration**. All three tie and the
+field is `UNRESOLVED` — no winner is invented, both candidates stay visible.
+Conflicts are never collapsed: losing values are retained and flagged.
+
+```bash
+make policy       # print the active tolerances, ranking and thresholds
+make provenance   # recompute both demo incidents (offline, deterministic)
+# 10 reports received - 1 duplicate = 9 observations -> 9 revisions -> 6 meaningful
+```
+
+A revision is **MEANINGFUL** if it crosses a dispatch threshold, changes the
+capstone recommendation, or exceeds the field tolerance — everything else is MINOR
+and is still recorded, chained and inspectable. Each revision carries the sentence
+that classified it, and that sentence is what the console shows.
+
+Inspect it in the **PROVENANCE** console view: timeline with meaningful rows
+dominant, a meaningful-only toggle that reports what it suppressed and why,
+per-field provenance, and a second scenario where the ranking picks the **wrong**
+source and the flagged alternative turns out to have been right all along.
+Revisions append to the existing hash chain, so `make verify-audit` covers change
+history.
+
+Full write-up: **[`RECONCILIATION.md`](RECONCILIATION.md)**.
+
 ## Autonomy & escalation model (Step 7)
 
 The Commander classifies every field order against an authority matrix:
@@ -225,6 +259,16 @@ python -m disastermind verify-audit audit.jsonl      # check the hash-chain
 python -m disastermind.demo B                         # narrated end-to-end demo
 ```
 
+```bash
+make policy         # print the active reconciliation policy
+make provenance     # recompute the incident provenance views
+make verify-audit AUDIT=audit.jsonl   # verify a decision-log hash chain
+make ledger         # refresh the audit-ledger snapshot the console footer reads
+make sensitivity    # sweep the evacuation assumptions, report where decisions flip
+make benchmark      # coordination throughput + latency percentiles
+make help           # every target, with descriptions
+```
+
 ## Extended surface
 
 Built on top of the Group A core (all optional/heavy deps lazy with fallbacks):
@@ -248,7 +292,9 @@ Built on top of the Group A core (all optional/heavy deps lazy with fallbacks):
 ```
 disastermind/
   core/        contracts (Message/Topic/enums), bus, BaseAgent, config
-  models/      geo primitives + domain dataclasses
+  models/      geo primitives + domain dataclasses; observation store,
+               reconciliation policy + fold (conflicting/duplicate reports),
+               fixtures/ (committed demo incidents)
   audit/       hash-chained DecisionLogger
   tier3/       ingestion (+ live fetch) · iot · dispatch   (no decision authority)
   tier2/       prediction (+ ml seam) · cascade · resource · routing · field
