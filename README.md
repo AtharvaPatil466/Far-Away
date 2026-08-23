@@ -186,6 +186,11 @@ make shadow-score     # running scorecard (POD/FAR/AUC/Brier; honest n_unresolve
 make shadow-verify    # prove the hash-chain is intact
 ```
 
+Today `shadow-score` returns `scoreable: false` (16 of the required 30 outcomes
+settled, 0 positives): below that floor the guard withholds AUC/POD/FAR rather
+than score on noise — an *undefined* 0.5 AUC is indistinguishable on screen from
+a measured one.
+
 This is the decisive validation step — predicting on data the model has never
 seen — in motion. See [`docs/SHADOW_SEASON.md`](docs/SHADOW_SEASON.md).
 
