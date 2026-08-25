@@ -1,34 +1,34 @@
 {
   "anchor": {
-    "attested_head": "f95a3f0ca6e82339a07de7c65beb4218c57796b6cae4b83c49f2ff96b7329b97",
-    "current_head": "f95a3f0ca6e82339a07de7c65beb4218c57796b6cae4b83c49f2ff96b7329b97",
-    "detail": "chain head attested by https://github.com/AtharvaPatil466/Far-Away/actions/runs/32701873249",
+    "attested_head": "aa6e94b8dd7a31bb19b4652ff881c6317179119134ca26a74e5a2ba4398e8365",
+    "current_head": "aa6e94b8dd7a31bb19b4652ff881c6317179119134ca26a74e5a2ba4398e8365",
+    "detail": "chain head attested by https://github.com/AtharvaPatil466/Far-Away/actions/runs/32820341370",
     "head_matches": true,
     "receipt": {
-      "chain_head": "f95a3f0ca6e82339a07de7c65beb4218c57796b6cae4b83c49f2ff96b7329b97",
+      "chain_head": "aa6e94b8dd7a31bb19b4652ff881c6317179119134ca26a74e5a2ba4398e8365",
       "repo": "AtharvaPatil466/Far-Away",
-      "run_id": "32701873249",
-      "server_time": "2026-08-24T07:31:44+00:00",
-      "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/32701873249"
+      "run_id": "32820341370",
+      "server_time": "2026-08-25T07:11:20+00:00",
+      "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/32820341370"
     },
-    "run_id": "32701873249",
-    "server_time": "2026-08-24T07:31:44+00:00",
+    "run_id": "32820341370",
+    "server_time": "2026-08-25T07:11:20+00:00",
     "stale_after_hours": 48,
     "state": "verified",
-    "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/32701873249"
+    "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/32820341370"
   },
   "chain_intact": true,
   "freshness": {
-    "last_commit_at": "2026-08-24T07:31:44.677361+00:00",
-    "last_poll_at": "2026-08-24T07:31:44.678127+00:00",
+    "last_commit_at": "2026-08-25T07:11:20.169363+00:00",
+    "last_poll_at": "2026-08-25T07:11:20.170286+00:00",
     "poll_cadence_hours": 24,
     "stale_after_hours": 48,
     "state": "ingesting"
   },
   "monotonic": true,
-  "pending": 33,
-  "predictions": 60,
-  "reason": "scoring requires a season: 27 settled (need 30), 0 positive (need 1)",
+  "pending": 35,
+  "predictions": 76,
+  "reason": "scoring requires a season: 41 settled (need 30), 0 positive (need 1)",
   "scoreable": false,
-  "settled": 27
+  "settled": 41
 }
