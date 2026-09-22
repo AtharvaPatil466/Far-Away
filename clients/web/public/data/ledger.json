@@ -1,34 +1,34 @@
 {
   "anchor": {
-    "attested_head": "1298c4179d07c7e9025c0e65abf18533c0dd16b2f4af7cb82382a2cad1d7fd54",
-    "current_head": "1298c4179d07c7e9025c0e65abf18533c0dd16b2f4af7cb82382a2cad1d7fd54",
-    "detail": "chain head attested by https://github.com/AtharvaPatil466/Far-Away/actions/runs/35602377108",
+    "attested_head": "dc727d35632b0c7f6bd84bb8047284ef0184f31eae88ac6a656ecb2ae2780147",
+    "current_head": "dc727d35632b0c7f6bd84bb8047284ef0184f31eae88ac6a656ecb2ae2780147",
+    "detail": "chain head attested by https://github.com/AtharvaPatil466/Far-Away/actions/runs/35723196560",
     "head_matches": true,
     "receipt": {
-      "chain_head": "1298c4179d07c7e9025c0e65abf18533c0dd16b2f4af7cb82382a2cad1d7fd54",
+      "chain_head": "dc727d35632b0c7f6bd84bb8047284ef0184f31eae88ac6a656ecb2ae2780147",
       "repo": "AtharvaPatil466/Far-Away",
-      "run_id": "35602377108",
-      "server_time": "2026-09-21T12:55:58+00:00",
-      "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/35602377108"
+      "run_id": "35723196560",
+      "server_time": "2026-09-22T11:45:29+00:00",
+      "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/35723196560"
     },
-    "run_id": "35602377108",
-    "server_time": "2026-09-21T12:55:58+00:00",
+    "run_id": "35723196560",
+    "server_time": "2026-09-22T11:45:29+00:00",
     "stale_after_hours": 48,
     "state": "verified",
-    "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/35602377108"
+    "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/35723196560"
   },
   "chain_intact": true,
   "freshness": {
-    "last_commit_at": "2026-09-21T12:55:58.156020+00:00",
-    "last_poll_at": "2026-09-21T12:55:58.159101+00:00",
+    "last_commit_at": "2026-09-22T11:45:29.036830+00:00",
+    "last_poll_at": "2026-09-22T11:45:29.041218+00:00",
     "poll_cadence_hours": 24,
     "stale_after_hours": 48,
     "state": "ingesting"
   },
   "monotonic": true,
   "pending": 29,
-  "predictions": 417,
+  "predictions": 430,
   "reason": "",
   "scoreable": true,
-  "settled": 388
+  "settled": 401
 }
