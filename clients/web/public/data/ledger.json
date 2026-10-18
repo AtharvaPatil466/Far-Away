@@ -1,34 +1,34 @@
 {
   "anchor": {
-    "attested_head": "66555d9bfc87b60e7de9daa72b15e5fa2b5d4fd229a9e42abcb6a57301c0b1f3",
-    "current_head": "66555d9bfc87b60e7de9daa72b15e5fa2b5d4fd229a9e42abcb6a57301c0b1f3",
-    "detail": "chain head attested by https://github.com/AtharvaPatil466/Far-Away/actions/runs/39026442416",
+    "attested_head": "b761865e21751402adf8332fd51c35b01a91f60f4d4fe04571e9362f985ee04c",
+    "current_head": "b761865e21751402adf8332fd51c35b01a91f60f4d4fe04571e9362f985ee04c",
+    "detail": "chain head attested by https://github.com/AtharvaPatil466/Far-Away/actions/runs/39122476107",
     "head_matches": true,
     "receipt": {
-      "chain_head": "66555d9bfc87b60e7de9daa72b15e5fa2b5d4fd229a9e42abcb6a57301c0b1f3",
+      "chain_head": "b761865e21751402adf8332fd51c35b01a91f60f4d4fe04571e9362f985ee04c",
       "repo": "AtharvaPatil466/Far-Away",
-      "run_id": "39026442416",
-      "server_time": "2026-10-17T10:50:57+00:00",
-      "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/39026442416"
+      "run_id": "39122476107",
+      "server_time": "2026-10-18T11:15:32+00:00",
+      "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/39122476107"
     },
-    "run_id": "39026442416",
-    "server_time": "2026-10-17T10:50:57+00:00",
+    "run_id": "39122476107",
+    "server_time": "2026-10-18T11:15:32+00:00",
     "stale_after_hours": 48,
     "state": "verified",
-    "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/39026442416"
+    "url": "https://github.com/AtharvaPatil466/Far-Away/actions/runs/39122476107"
   },
   "chain_intact": true,
   "freshness": {
-    "last_commit_at": "2026-10-17T10:50:57.460221+00:00",
-    "last_poll_at": "2026-10-17T10:50:57.465802+00:00",
+    "last_commit_at": "2026-10-18T11:15:32.551817+00:00",
+    "last_poll_at": "2026-10-18T11:15:32.560669+00:00",
     "poll_cadence_hours": 24,
     "stale_after_hours": 48,
     "state": "ingesting"
   },
   "monotonic": true,
-  "pending": 32,
-  "predictions": 872,
+  "pending": 25,
+  "predictions": 877,
   "reason": "",
   "scoreable": true,
-  "settled": 840
+  "settled": 852
 }
